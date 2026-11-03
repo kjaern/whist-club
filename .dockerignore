@@ -1,0 +1,10 @@
+.venv
+config
+data
+build
+dist
+*.sqlite3
+__pycache__
+.pytest_cache
+.env
+*.zip

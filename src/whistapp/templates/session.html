@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="live-heading">
+    <h1>
+      {{session.title}}
+    </h1>
+    <a href="/sessions/{{session.id}}/live" target="_blank">Åbn livevisning ↗</a>
+    <a class="button secondary" href="/sessions/{{session.id}}/history">Ændringshistorik</a>
+  </div>
+  {% if request.query_params.get("error") == "no_hands" %}
+    <p role="alert">
+      Registrer mindst én hånd, før du afslutter.
+    </p>
+  {% endif %}
+  {% if request.query_params.get("error") == "settlement" %}
+    <p role="alert">Spilaftenen blev ikke afsluttet: pladsbetalingen kunne ikke beregnes (fx pointlighed eller forkert betalingstabel). Se serverloggen for detaljer.</p>
+  {% elif request.query_params.get("error") == "save_failed" %}
+    <p role="alert">Spilaftenen blev ikke afsluttet: resultatet kunne ikke gemmes. Kontakt administratoren og se serverloggen.</p>
+  {% endif %}
+  {% if close_error %}
+    <p role="alert" class="close-error">{{ close_error }}</p>
+  {% endif %}
+  {% if session.origin == 'imported' %}
+  <section class="card"><h2>Historisk import</h2>
+    <form method="post" action="/sessions/{{session.id}}/money">
+      <label><input type="checkbox" name="collect_club_money" value="1" {% if session.collect_club_money %}checked{% endif %} {% if not session.is_club %}disabled{% endif %}> Medregn i pengestatistik</label>
+      <button type="submit">Gem</button>
+    </form>
+  </section>
+  {% endif %}
+  <section class="card"><h2>Originalark</h2>
+    <form method="post" action="/sessions/{{session.id}}/photos" enctype="multipart/form-data">
+      <label>Tilføj fotos <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+      <button type="submit">Upload fotos</button>
+    </form>
+    {% if photos %}<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      {% for photo in photos %}<div>
+        <a href="/sessions/{{session.id}}/photos/{{photo.id}}" target="_blank"><img src="/sessions/{{session.id}}/photos/{{photo.id}}" alt="{{photo.original_name}}" loading="lazy" style="max-width:130px;max-height:180px;object-fit:contain"></a>
+        <form method="post" action="/sessions/{{session.id}}/photos/{{photo.id}}/delete"><button type="submit">Fjern</button></form>
+      </div>{% endfor %}
+    </div>{% endif %}
+  </section>
+  {% if source_previews %}
+  <style>
+    .source-preview { overflow:auto; max-height:32rem; margin:.5rem 0 1rem; }
+    .source-preview table { border-collapse:collapse; width:max-content; min-width:100%; }
+    .source-preview td, .source-preview th { border:1px solid #ccd4d8; padding:.3rem .45rem; white-space:pre-wrap; }
+    .source-preview .uncertain { background:#ffe39b; }
+    .source-preview .source-warning { outline:2px solid #c47700; }
+    .source-text { white-space:pre-wrap; max-height:24rem; overflow:auto; }
+  </style>
+  <section class="card"><h2>Importmateriale og originalfiler</h2>
+    <p class="muted">Kildematerialet er gemt uændret. Den gennemgåede Whist-aften vises nedenfor separat.</p>
+    {% for source in source_previews %}
+      <details>
+        <summary><a href="{{source.url}}" download>{{source.original_name}}</a> · {{source.kind}}</summary>
+        {% if source.sheets %}
+          {% for sheet in source.sheets %}
+            <details open><summary>Fane: {{sheet.name}}</summary>
+              <div class="source-preview"><table>
+                {% for row in sheet.rows %}
+                  {% set row_flags = sheet.flags[loop.index0] %}
+                  {% if loop.first %}<thead><tr>{% for cell in row %}<th class="{{row_flags[loop.index0] if loop.index0 < row_flags|length else ''}}">{{cell}}</th>{% endfor %}</tr></thead><tbody>
+                  {% else %}<tr>{% for cell in row %}<td class="{{row_flags[loop.index0] if loop.index0 < row_flags|length else ''}}">{{cell}}</td>{% endfor %}</tr>{% endif %}
+                {% endfor %}
+                </tbody></table></div>
+              {% if sheet.truncated %}<p class="muted">Forhåndsvisningen er begrænset; download Excel-filen for resten.</p>{% endif %}
+            </details>
+          {% endfor %}
+        {% endif %}
+        {% if source.text %}<h3>remarks.md</h3><pre class="source-text">{{source.text}}</pre>{% endif %}
+        {% if source.zip_entries %}<h3>Filer i ZIP</h3><ul>{% for entry in source.zip_entries %}<li>{{entry.name}} ({{entry.size}} bytes)</li>{% endfor %}</ul>{% endif %}
+        {% for markdown in source.zip_texts or [] %}<h3>{{markdown.name}}</h3><pre class="source-text">{{markdown.text}}</pre>{% endfor %}
+        {% if source.preview_error %}<p class="muted">{{source.preview_error}}</p>{% endif %}
+      </details>
+    {% endfor %}
+  </section>
+  {% endif %}
+  {% if change_logs %}
+  <section class="card"><h2>Ændringslog</h2>
+    <ul>{% for entry in change_logs %}<li><time>{{entry.created_at}}</time> · {{entry.user_id}} · {{entry.description}}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+  <div id="session-content">
+    {% include 'partials/session_content.html' %}
+  </div>
+  <script>
+// Only the results panel is refreshed. Never overwrite a draft hand form.
+(function () {
+  const sessionId = {{ session.id }};
+  // Session-scoped per-tab identifier; survives HTMX replacements but not shared across tabs.
+  window.whistClientId = window.whistClientId || (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random());
+  document.addEventListener('htmx:configRequest', function(event) {
+    if (event.detail.path.endsWith('/hands') && event.detail.elt?.id === 'new-hand-form') {
+      event.detail.parameters.origin_client_id = window.whistClientId;
+    }
+  });
+  const stream = new EventSource(`/sessions/${sessionId}/editor/events`);
+  let pending = false;
+  stream.addEventListener('results-changed', function (event) {
+    let change; try { change = JSON.parse(event.data); } catch { return; }
+    if (!document.getElementById('editor-results') || pending) return;
+    pending = true;
+    htmx.ajax('GET', `/sessions/${sessionId}/editor/results`, {
+      target: '#editor-results', swap: 'outerHTML'
+    }).finally(() => { pending = false; });
+    if (change.new_hand && change.origin !== window.whistClientId && document.getElementById('new-hand-area')) {
+      htmx.ajax('GET', `/sessions/${sessionId}/editor/new-hand`, {
+        target: '#new-hand-area', swap: 'outerHTML'
+      });
+    }
+  });
+  window.addEventListener('pagehide', () => stream.close());
+})();
+</script>
+{% endblock %}

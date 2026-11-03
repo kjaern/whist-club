@@ -1,0 +1,177 @@
+<section class="card" id="editor-results">
+  <h2>
+    Spilaften · løbende point
+  </h2>
+  <div class="table-scroll">
+    {% set sizing = namespace(max_label=0, max_change=1) %}
+    {% for bid in rules.bids.values() %}
+      {% if bid.label|length > sizing.max_label %}
+        {% set sizing.max_label = bid.label|length %}
+      {% endif %}
+    {% endfor %}
+    {% for row in rows %}
+      {% for change in row.changes.values() %}
+        {% if change|length > sizing.max_change %}
+          {% set sizing.max_change = change|length %}
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+    <table class="night" style="--player-column-width: {{ [190, (sizing.max_label + 4 + 4 + sizing.max_change) * 8 + 24]|max }}px">
+      <colgroup><col class="hand-column">
+      {% for p in players %}
+        <col class="player-column">
+      {% endfor %}
+      <col class="edit-column"></colgroup>
+      <thead>
+        <tr>
+          <th>
+            #
+          </th>
+          {% for p in players %}
+            <th>
+              {{p.name}}
+              {% if not p.active %}
+                (gået)
+              {% endif %}
+            </th>
+          {% endfor %}
+          <th class="edit-head">
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr class="score-row">
+            <td class="hand-num">
+              {{row.number}}
+            </td>
+            {% for p in players %}
+              <td class="
+              {% if p.id==row.declarer or p.id in row.special_results %}
+                declared
+              {% elif p.id not in row.participants %}
+                sitting-out
+              {% endif %}
+              ">
+              <div class="cell-line">
+                {% if p.id in row.special_results %}
+                  <span class="bid-label">{{row.hand.bid_label}}
+                  {% if row.hand.target %}
+                    {{row.hand.target}}
+                  {% endif %}
+                  </span><span class="actual">{{row.special_results[p.id].actual if row.special_results[p.id].actual is not none else '…'}}</span>
+                {% elif p.id==row.declarer %}
+                  <span class="bid-label">{{row.hand.bid_label}}
+                  {% if row.hand.target %}
+                    {{row.hand.target}}
+                  {% endif %}
+                  </span><span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
+                {% elif p.id==row.partner and row.hand.actual is not none %}
+                  <span class="partner-mark" title="Makker">M</span>
+                {% elif p.id not in row.participants %}
+                  <span class="muted">–</span>
+                {% endif %}
+                {% if p.id in row.changes %}
+                  <span class="delta
+                  {% if row.changes[p.id].startswith('-') %}
+                    delta-negative
+                  {% elif row.changes[p.id]|float > 0 %}
+                    delta-positive
+                  {% endif %}
+                  ">{{'+' if not row.changes[p.id].startswith('-') else ''}}{{row.changes[p.id]}}</span>
+                {% endif %}
+                <span class="running">{{row.totals[p.id]}}</span>
+              </div>
+            </td>
+          {% endfor %}
+          <td class="edit-cell">
+            <details class="row-editor" >
+              <summary title="Rediger resultat">
+                Ret
+              </summary>
+              <div class="editor-panel">
+                <div class="editor-heading">
+                  Hånd {{row.number}} · {{row.hand.bid_label}}
+                  {% if row.hand.target %}
+                    {{row.hand.target}}
+                  {% endif %}
+                </div>
+                <form hx-post="/sessions/{{session.id}}/hands/{{row.hand.id}}/result" hx-target="#session-content">
+                  <label>Melder<select name="declarer" required>
+                    {% for p in players if p.id in row.participants %}
+                      <option value="{{p.id}}" {% if p.id==row.declarer %}selected{% endif %}>{{p.name}}</option>
+                    {% endfor %}
+                  </select></label>
+                  <label>Melding<select name="bid_key" class="edit-bid-key" onchange="whistEditBid(this)">
+                    {% for key,bid in rules.bids.items() if key in enabled_bids|default(rules.bids.keys()|list) or key == row.hand.bid_key %}
+                      <option value="{{key}}" data-target="{{bid.target}}" {% if key==row.hand.bid_key %}selected{% endif %}>{{bid.label}}</option>
+                    {% endfor %}
+                  </select></label>
+                  <label class="edit-target" {% if rules.bids[row.hand.bid_key].target != 'variable' %}hidden{% endif %}>Meldt<select name="target">
+                    {% for n in range(6,14) %}<option value="{{n}}" {% if n==row.hand.target %}selected{% endif %}>{{n}}</option>{% endfor %}
+                  </select></label>
+                  <div class="edit-normal" {% if rules.bids[row.hand.bid_key].target != 'variable' %}hidden{% endif %}>
+                    <label>Makker (melder = solo)<select name="partner">
+                      {% for p in players if p.id in row.participants %}
+                        <option value="{{p.id}}" {% if p.id==(row.partner if row.partner is not none else row.declarer) %}selected{% endif %}>{{p.name}}</option>
+                      {% endfor %}
+                    </select></label>
+                    <label>Faktiske stik<select name="actual">
+                      {% for n in range(14) %}<option value="{{n}}" {% if n==(row.hand.actual if row.hand.actual is not none else 0) %}selected{% endif %}>{{n}}</option>{% endfor %}
+                    </select></label>
+                  </div>
+                  <div class="edit-special" {% if rules.bids[row.hand.bid_key].target == 'variable' %}hidden{% endif %}>
+                    <fieldset class="edit-going" {% if rules.bids[row.hand.bid_key].target != 'fixed' %}hidden{% endif %}>
+                      <legend>Andre meldere (ved Sol)</legend>
+                      {% for p in players if p.id in row.participants %}
+                        <label><input type="checkbox" name="going" value="{{p.id}}" {% if p.id in row.special_results and p.id != row.declarer %}checked{% endif %}>{{p.name}}</label>
+                      {% endfor %}
+                    </fieldset>
+                    {% for p in players if p.id in row.participants %}
+                      <label>{{p.name}} · faktiske stik<select name="actual_{{p.id}}">
+                        {% for n in range(14) %}
+                          <option value="{{n}}" {% if n==(row.special_results[p.id].actual if p.id in row.special_results and row.special_results[p.id].actual is not none else 0) %}selected{% endif %}>{{n}}</option>
+                        {% endfor %}
+                      </select></label>
+                    {% endfor %}
+                  </div>
+                  <button>{{'Gem ændring' if row.changes else 'Registrer resultat'}}</button>
+                </form>
+                <button type="button" class="secondary cancel-edit" onclick="this.closest('details').open=false">Annuller</button>
+                <form hx-post="/sessions/{{session.id}}/hands/{{row.hand.id}}/delete" hx-target="#session-content" hx-confirm="Slet hånd {{row.number}}?">
+                  <button class="secondary">Slet hånd</button>
+                </form>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th>
+          Total
+        </th>
+        {% for p in players %}
+          <th class="score-total" style="background-color:{{score_colors[p.id]}}">
+            {{totals[p.id]}}
+          </th>
+        {% endfor %}
+        <th>
+        </th>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+</section>
+
+<script>
+function whistEditBid(select) {
+  const panel = select.closest('.editor-panel');
+  const mode = select.selectedOptions[0].dataset.target;
+  panel.querySelector('.edit-target').hidden = mode !== 'variable';
+  panel.querySelector('.edit-normal').hidden = mode !== 'variable';
+  panel.querySelector('.edit-special').hidden = mode === 'variable';
+  panel.querySelector('.edit-going').hidden = mode !== 'fixed';
+}
+</script>

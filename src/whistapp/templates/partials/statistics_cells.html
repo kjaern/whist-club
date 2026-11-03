@@ -1,0 +1,42 @@
+<td>
+  {{ p.name }}
+</td>
+<td>
+  {{ p.nights }}
+</td>
+<td>
+  {{ p.hands }}
+</td>
+<td>
+  {{ p.bids }}
+</td>
+<td>
+  {{ p.partner }}
+</td>
+<td>
+  {{ p.won }}
+</td>
+<td>
+  {{ p.lost }}
+</td>
+<td>
+  {{ '%+d'|format(p.bid_balance) }}
+</td>
+<td>
+  {{ '%.1f' | format((p.points.split('/')[0] | float) / (p.points.split('/')[1] | float)) if '/' in p.points else p.points }}
+</td>
+<td>
+  {{ p.amount }}
+</td>
+<td>
+  {{ p.fejl40 }}
+</td>
+<td>
+  {{ p.eligible }}
+</td>
+<td>
+  {{ p.self_partner }}
+</td>
+<td>
+  {{ p.self_pct }}
+</td>

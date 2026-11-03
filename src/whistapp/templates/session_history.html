@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Ændringshistorik · {{ session.title }}</h1>
+<p><a href="/sessions/{{session.id}}">← Tilbage til spilaftenen</a></p>
+<section class="card">
+  <h2>Handlinger</h2>
+  {% if operations %}
+    <ul>{% for operation in operations %}
+      <li><strong>{{operation.actor_username}} {{operation.summary}}</strong> · <time>{{operation.created_at}}</time></li>
+    {% endfor %}</ul>
+  {% else %}<p>Ingen registrerede ændringer endnu.</p>{% endif %}
+</section>
+{% endblock %}

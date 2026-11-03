@@ -1,0 +1,13 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Min konto · {{ account.username }}</h1>
+{% if account.must_change_password %}<p role="alert">Du skal vælge en ny adgangskode, før du kan fortsætte.</p>{% endif %}
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% if saved %}<p role="status">Adgangskoden er ændret.</p>{% endif %}
+<section class="card"><h2>Skift adgangskode</h2>
+<form method="post" action="/account/password">
+<label>Nuværende adgangskode<input type="password" name="current_password" autocomplete="current-password" required></label>
+<label>Ny adgangskode (mindst 8 tegn)<input type="password" name="new_password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
+<label>Gentag ny adgangskode<input type="password" name="confirm_password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
+<button type="submit">Gem ny adgangskode</button></form></section>
+<p>Din konto er oprettet. Adgang til klubfunktioner bliver tilføjet, når rollebaserede rettigheder er klar.</p>
+{% endblock %}

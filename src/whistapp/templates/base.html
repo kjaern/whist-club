@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="da">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Whist</title>
+        <link rel="stylesheet" href="/static/style.css?v=26-admin-ai-20261103">
+        <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    </head>
+    <body>
+<header>
+  <a href="/">♠ Whist</a>
+  <div class="header-actions">
+    {% set club = active_club(request) %}
+    {% if club %}<a href="/clubs">{{ club.name }}{% if club.choices > 1 %} · Skift klub{% endif %}</a>{% else %}<a href="/clubs">Vælg klub</a>{% endif %}
+    {% if ai_import_allowed() %}<a href="/import/current">Aktuelle importer</a>{% endif %}
+    {% if can_manage_club(request) %}<a href="/club">Klubadministration</a>{% endif %}
+    {% if request.session.get("user") == "admin" %}<a href="/admin/accounts">Serveradministration</a>{% endif %}
+    <a href="/account">Min konto</a>
+    <button type="button" class="secondary" id="show-bid-rules" aria-haspopup="dialog">Vis regler</button>
+    <form method="post" action="/logout" class="logout-form">
+      <button type="submit" class="secondary">Log ud</button>
+    </form>
+  </div>
+</header>
+<main>
+  {% block content %}
+  {% endblock %}
+</main>
+<footer class="build-info">v{{ app_version }} · {{ app_commit }}</footer>
+<dialog id="bid-rules-dialog" class="rules-dialog" aria-labelledby="rules-dialog-title">
+<div class="rules-dialog-heading">
+  <strong id="rules-dialog-title">Regler</strong><button type="button" class="secondary" id="close-bid-rules" aria-label="Luk regler">Luk ×</button>
+</div>
+<div class="rules-navigation">
+  <button type="button" class="secondary" id="previous-bid-rule">← Forrige</button><span id="rule-position" aria-live="polite"></span><button type="button" class="secondary" id="next-bid-rule">Næste →</button>
+</div>
+<div id="bid-rules-panel">
+</div>
+</dialog>
+<dialog id="stat-info-dialog" class="rules-dialog" aria-labelledby="stat-info-title" aria-describedby="stat-info-description">
+  <div class="rules-dialog-heading">
+    <strong id="stat-info-title"></strong>
+    <button type="button" class="secondary" id="close-stat-info" aria-label="Luk forklaring">Luk ×</button>
+  </div>
+  <p id="stat-info-description"></p>
+</dialog>
+<script>
+(() => {
+  const statDialog = document.getElementById('stat-info-dialog');
+  document.addEventListener('click', event => {
+    const button = event.target.closest('.stats-heading-button');
+    if (!button) return;
+    document.getElementById('stat-info-title').textContent = button.textContent.trim();
+    document.getElementById('stat-info-description').textContent = button.dataset.statDescription;
+    statDialog.showModal();
+  });
+  document.getElementById('close-stat-info').addEventListener('click', () => statDialog.close());
+  statDialog.addEventListener('click', event => { if (event.target === statDialog) statDialog.close(); });
+})();
+</script>
+<script>
+(() => {
+  const rules = {{ bid_rule_options() | tojson }};
+  const dialog = document.getElementById('bid-rules-dialog');
+  const panel = document.getElementById('bid-rules-panel');
+  const position = document.getElementById('rule-position');
+  let index = 0;
+  async function showRule(nextIndex) {
+    if (!rules.length) return;
+    index = (nextIndex + rules.length) % rules.length;
+    const selected = rules[index];
+    position.textContent = selected.label + ' (' + (index + 1) + '/' + rules.length + ')';
+    panel.textContent = 'Indlæser regler…';
+    try {
+      const response = await fetch('/bids/' + encodeURIComponent(selected.key) + '/rules');
+      const html = response.ok ? await response.text() : 'Reglerne kunne ikke indlæses.';
+      if (dialog.open && rules[index] === selected) panel.innerHTML = html;
+    } catch (_) {
+      if (dialog.open && rules[index] === selected) panel.textContent = 'Reglerne kunne ikke indlæses.';
+    }
+  }
+  document.getElementById('show-bid-rules').addEventListener('click', () => {
+    const current = document.querySelector('#new-hand-form [name=bid_key]');
+    const selected = current ? rules.findIndex(rule => rule.key === current.value) : 0;
+    dialog.showModal();
+    showRule(Math.max(0, selected));
+  });
+  document.getElementById('close-bid-rules').addEventListener('click', () => dialog.close());
+  document.getElementById('previous-bid-rule').addEventListener('click', () => showRule(index - 1));
+  document.getElementById('next-bid-rule').addEventListener('click', () => showRule(index + 1));
+  dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+})();
+</script></body></html>

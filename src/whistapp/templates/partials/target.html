@@ -1,0 +1,19 @@
+{% if bid.target=='variable' %}
+  <label>Budte stik<select name="target">
+  {% for n in range(bid.min_target,bid.max_target+1) %}
+    <option value="{{n}}"
+    {% if n==bid.default_target %}
+      selected
+    {% endif %}
+    >{{n}}</option>
+  {% endfor %}
+  </select></label>
+{% elif bid.target=='none' %}
+  <div class="fixed">
+    Paskrig · alle fire registrerer stik
+  </div>
+{% else %}
+  <div class="fixed">
+    {{bid.label}} · højst {{bid.max_allowed_tricks}} stik
+  </div>
+{% endif %}

@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>AI-transskription</h1>
+<p>Følg trinene fra fotoklargøring til valideret Excel. Resultatet åbnes til gennemgang, når transskriptionen er færdig.</p>
+<section class="card">
+  <p id="ai-job-status" role="status" aria-live="polite">Starter transskriptionen…</p>
+  <ol id="ai-job-events" aria-live="polite"></ol>
+  <details id="ai-model-output-panel" open hidden>
+    <summary>Modellens svar (også ved ugyldig JSON)</summary>
+    <p>Dette er modellens originale tekst, ikke en rettet transskription.</p>
+    <button type="button" id="ai-copy-output">Kopiér svar</button>
+    <pre id="ai-model-output" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:35rem;overflow:auto"></pre>
+  </details>
+  <details id="ai-reasoning-panel" hidden>
+    <summary>Modelræsonnement (hvis API'et leverer det)</summary>
+    <pre id="ai-reasoning" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:25rem;overflow:auto"></pre>
+  </details>
+  <p id="ai-reasoning-unavailable">Modellens ræsonnement vises kun, hvis API'et returnerer det særskilt. Aktivitetsloggen nedenfor er appens trin.</p>
+  <p id="ai-job-error" role="alert" class="error" hidden></p>
+  <a id="ai-job-review" href="#" hidden>Gennemgå transskriptionen</a>
+  <form id="ai-job-retry" action="/import/ai" method="post" hidden>
+    <input type="hidden" name="pending_photos" value="{{ pending_photos }}">
+    <button type="submit">Prøv igen med de bevarede fotos</button>
+  </form>
+</section>
+{% if staged_photo_names %}
+<section class="card">
+  <h2>Fotos i denne transskription</h2>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    {% for photo in staged_photo_names %}<a href="/import/staged/{{pending_photos}}/{{photo}}" target="_blank"><img src="/import/staged/{{pending_photos}}/{{photo}}" alt="Originalt scoreark" style="max-height:170px;max-width:120px;object-fit:contain"></a>{% endfor %}
+  </div>
+</section>
+{% endif %}
+<p><a href="/import">← Tilbage til import</a></p>
+<script>
+(() => {
+  const status = document.getElementById('ai-job-status');
+  const events = document.getElementById('ai-job-events');
+  const error = document.getElementById('ai-job-error');
+  const review = document.getElementById('ai-job-review');
+  const retry = document.getElementById('ai-job-retry');
+  const outputPanel = document.getElementById('ai-model-output-panel');
+  const output = document.getElementById('ai-model-output');
+  const reasoningPanel = document.getElementById('ai-reasoning-panel');
+  const reasoning = document.getElementById('ai-reasoning');
+  document.getElementById('ai-copy-output').addEventListener('click', () => {
+    navigator.clipboard.writeText(output.textContent);
+  });
+  const stageLabels = {
+    photos: 'Fotos', start: 'Start', configuration: 'Konfiguration',
+    preparation: 'Prompt', request: 'Forespørgsel', response: 'Svar',
+    parsing: 'Fortolkning', workbooks: 'Filer', complete: 'Klar', error: 'Fejl'
+  };
+  let waitingTimer = null;
+  const stream = new EventSource('/import/ai/jobs/{{ job_id }}/events');
+  stream.onmessage = message => {
+    const update = JSON.parse(message.data);
+    if (update.stage === 'model_output') {
+      outputPanel.hidden = false;
+      output.textContent = update.message;
+      return;
+    }
+    if (update.stage === 'reasoning') {
+      reasoningPanel.hidden = false;
+      reasoning.textContent = update.message;
+      document.getElementById('ai-reasoning-unavailable').hidden = true;
+      return;
+    }
+    const item = document.createElement('li');
+    item.dataset.stage = update.stage;
+    item.textContent = `${stageLabels[update.stage] || update.stage}: ${update.message}`;
+    events.append(item);
+    if (waitingTimer) { clearInterval(waitingTimer); waitingTimer = null; }
+    status.textContent = update.status === 'complete'
+      ? 'Transskriptionen er klar.'
+      : update.status === 'failed' ? 'Transskriptionen fejlede.' : update.message;
+    if (update.stage === 'request') {
+      const started = Date.now();
+      const updateWaiting = () => {
+        const seconds = Math.floor((Date.now() - started) / 1000);
+        status.textContent = `${update.message} Ventetid: ${seconds}s.`;
+      };
+      updateWaiting();
+      waitingTimer = setInterval(updateWaiting, 1000);
+    }
+    if (update.status === 'complete') {
+      review.href = update.review_url;
+      review.hidden = false;
+      stream.close();
+      window.location.assign(update.review_url);
+    } else if (update.status === 'failed') {
+      error.textContent = update.message;
+      error.hidden = false;
+      retry.hidden = false;
+      stream.close();
+    }
+  };
+  stream.onerror = () => {
+    status.textContent = 'SSE-forbindelsen afbrød midlertidigt; prøver at genoprette forbindelsen…';
+  };
+})();
+</script>
+{% endblock %}

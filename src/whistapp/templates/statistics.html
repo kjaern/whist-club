@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>
+    Klubstatistik
+  </h1>
+  <p>
+    Kun klubspilaftener med registrerede hænder. Beløb er beregnede resultater, ikke registrerede betalinger.
+  </p>
+  <form method="get" action="/statistics">
+    <label>Spilaftener <select name="origin" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if origin == 'all' else '' }}>Alle</option>
+      <option value="live" {{ 'selected' if origin == 'live' else '' }}>Live</option>
+      <option value="imported" {{ 'selected' if origin == 'imported' else '' }}>Importerede</option>
+    </select></label>
+  </form>
+  {% for section in sections %}
+    <section class="card">
+      <div class="stats-section-heading">
+        <h2>
+          {{ section.title }}
+        </h2>
+        {% if section.title != 'Alle år' %}
+          <a class="stats-night-link" href="/statistics/{{ section.title }}?origin={{ origin }}" aria-label="Se spilaftener for {{ section.title }}">{{ section.night_count }} spilaftener ↗</a>
+        {% endif %}
+      </div>
+      <div style="overflow-x:auto">
+        <table class="night">
+          <thead>
+            <tr>
+              {% include "partials/statistics_headers.html" %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in section.players %}
+              <tr>
+                {% include "partials/statistics_cells.html" %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <p>
+      Ingen klubhænder registreret endnu.
+    </p>
+  {% endfor %}
+  <a href="/">← Spilaftener</a>
+{% endblock %}

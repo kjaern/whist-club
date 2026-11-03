@@ -1,0 +1,21 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Vælg klub</h1>
+{% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+<section class="card"><h2>Dine klubber</h2>
+{% for club in clubs %}
+<form method="post" action="/clubs/select" class="fee-inline">
+<input type="hidden" name="club_id" value="{{ club.id }}">
+<button type="submit" {% if club.id != current %}class="secondary"{% endif %}>{{ club.name }}</button>
+{% if club.id == current %}<span class="muted">Valgt nu</span>{% endif %}
+</form>
+{% else %}<p>Din konto er ikke knyttet til et aktivt medlem i nogen klub. Kontakt en klubadministrator.</p>{% endfor %}
+</section>
+{% if can_create %}
+<section class="card"><h2>Opret ny klub</h2>
+<p class="muted">Du bliver klubadministrator i den nye klub. Medlemmer, aliaser, satser og statistik er adskilt fra de andre klubber.</p>
+<form method="post" action="/clubs/new">
+<label>Klubnavn<input name="name" value="{{ name }}" required maxlength="80"></label>
+<button type="submit">Opret klub</button>
+</form></section>
+{% endif %}
+{% endblock %}

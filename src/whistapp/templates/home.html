@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>
+    Spilaftener
+  </h1>
+  <p>
+    <a href="/statistics">Klubstatistik →</a> · <a href="/import">Importer spilaften →</a>{% if not member_view %} · <a href="/club">Klubadministration →</a>{% endif %}
+  </p>
+  <section class="card setup-card">
+    <h2>
+      Ny spilaften
+    </h2>
+    <form action="/sessions" method="post" class="setup-form" id="setup-form">
+      <label>Navn på spilaften<input name="title" value="{{default_title}}" required></label>
+      <div class="setup-players">
+        <strong>Spillere og siddepladser</strong>
+        <p class="muted">
+          Tryk på en spiller for at sætte vedkommende ved bordet. Brug pilene på telefonen eller træk i håndtaget på computeren for at ændre rækkefølgen.
+        </p>
+        <div class="seating-columns">
+          <div>
+            <strong>Klubmedlemmer</strong>
+            <div id="available-players" class="available-players">
+              {% for pid,name in club_players %}
+                <button type="button" class="secondary available-person" data-id="{{pid}}" data-name="{{name}}">+ {{name}}</button>
+              {% endfor %}
+            </div>
+          </div>
+          <div>
+            <strong>Bordrækkefølge</strong>
+            <div id="selected-seats" class="seating-items" aria-label="Bordrækkefølge">
+            </div>
+          </div>
+        </div>
+        <label>Andre spillere (valgfrit, én pr. linje)<textarea name="guests" rows="2" placeholder="Gæst 1&#10;Gæst 2"></textarea></label>
+        <small>Med gæster holdes aftenen uden for klubstatistikken. Gæster tilføjes efter klubmedlemmerne.</small>
+        <div id="seat-fields">
+        </div>
+      </div>
+      <fieldset>
+        <legend>Rotation for hele spilaftenen</legend>
+        <label class="radio-option"><input type="radio" name="rotation_mode" value="consecutive" checked>Fire i træk — 1, 2, 3, 4 → 2, 3, 4, 5</label>
+        <label class="radio-option"><input type="radio" name="rotation_mode" value="gap">To, pause, to — 1, 2, 4, 5 → 2, 3, 5, 6</label>
+      </fieldset>
+      <button type="submit">Opret spilaften</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>
+      Tidligere spilaftener
+    </h2>
+    {% for s in sessions %}
+      <p>
+        <a href="/sessions/{{s.id}}/live">{{s.title}}</a> · <a href="/sessions/{{s.id}}/export.xlsx">Eksportér Excel</a> ·
+        {% if not member_view %}<form action="/sessions/{{s.id}}/delete" method="post" style="display:inline" onsubmit="return confirm('Slet spilaftenen og alle dens resultater permanent?')">
+          <button type="submit" class="secondary" style="padding:0.2rem 0.5rem">Slet spilaften</button>
+        </form>
+        {% endif %} · {{s.player_count}} spillere · {{s.created_at}} · {{'Klub' if s.is_club else 'Uden for statistik'}} · {{'Importeret' if s.origin == 'imported' else 'Live'}}
+      </p>
+    {% else %}
+      <p>
+        Ingen spilaftener endnu.
+      </p>
+    {% endfor %}
+  </section>
+  <script>
+(function(){
+const available=document.getElementById('available-players');
+const selected=document.getElementById('selected-seats');
+const fields=document.getElementById('seat-fields');
+let drag=null;
+// Pointer tracking lives on the document, so reordering does not lose events
+// when the dragged element changes position in the DOM.
+function startDrag(e, row){
+  if(e.pointerType!=='mouse' || e.button!==0)return;
+  e.preventDefault();
+  drag={row,id:e.pointerId,handle:e.currentTarget};
+  row.classList.add('is-dragging');
+  document.body.classList.add('seating-drag-active');
+  try{e.currentTarget.setPointerCapture(e.pointerId)}catch(_){}
+}
+function moveDrag(e){
+  if(!drag || e.pointerId!==drag.id)return;
+  e.preventDefault();
+  const row=drag.row;
+  const other=[...selected.children].filter(x=>x!==row);
+  const before=other.find(x=>e.clientY < x.getBoundingClientRect().top+x.getBoundingClientRect().height/2);
+  if(before){if(row.nextElementSibling!==before)selected.insertBefore(row,before)}
+  else if(row!==selected.lastElementChild)selected.append(row);
+  sync();
+}
+function endDrag(e){
+  if(!drag || e.pointerId!==drag.id)return;
+  drag.row.classList.remove('is-dragging');
+  document.body.classList.remove('seating-drag-active');
+  drag=null;sync();
+}
+document.addEventListener('pointermove',moveDrag,{passive:false});
+document.addEventListener('pointerup',endDrag);
+document.addEventListener('pointercancel',endDrag);
+function sync(){
+  fields.replaceChildren();
+  Array.from(selected.children).forEach((el,i)=>{
+    const player=document.createElement('input'); player.type='hidden'; player.name='club_players'; player.value=el.dataset.id;
+    const seat=document.createElement('input'); seat.type='hidden'; seat.name='seat_'+el.dataset.id; seat.value=String(i+1);
+    fields.append(player,seat);
+  });
+}
+function select(btn){
+  const el=document.createElement('div'); el.className='seating-item'; el.dataset.id=btn.dataset.id;
+  const grip=document.createElement('span'); grip.className='drag-handle'; grip.textContent='☰'; grip.setAttribute('role','button'); grip.setAttribute('tabindex','0'); grip.setAttribute('aria-label','Træk '+btn.dataset.name);
+  const name=document.createElement('span'); name.className='seat-name'; name.textContent=btn.dataset.name;
+  const controls=document.createElement('span'); controls.className='seat-controls';
+  for(const [direction,label] of [['up','Flyt op'],['down','Flyt ned']]){
+    const move=document.createElement('button'); move.type='button';
+    move.className='secondary seat-move seat-'+direction;
+    move.textContent=direction==='up'?'↑':'↓';
+    move.setAttribute('aria-label',label+' '+btn.dataset.name);
+    move.onclick=()=>{
+      if(direction==='up' && el.previousElementSibling) selected.insertBefore(el,el.previousElementSibling);
+      if(direction==='down' && el.nextElementSibling) selected.insertBefore(el.nextElementSibling,el);
+      sync();
+    };
+    controls.append(move);
+  }
+  const remove=document.createElement('button'); remove.type='button'; remove.className='secondary seat-remove'; remove.textContent='×'; remove.setAttribute('aria-label','Fjern '+btn.dataset.name);
+  remove.onclick=()=>{available.append(btn);el.remove();sync()};
+  grip.addEventListener('pointerdown',e=>startDrag(e,el));
+  grip.addEventListener('dragstart',e=>e.preventDefault());
+  grip.addEventListener('keydown',e=>{
+    if(e.key==='ArrowUp'&&el.previousElementSibling){selected.insertBefore(el,el.previousElementSibling);sync();e.preventDefault()}
+    if(e.key==='ArrowDown'&&el.nextElementSibling){selected.insertBefore(el.nextElementSibling,el);sync();e.preventDefault()}
+  });
+  el.append(grip,name,controls,remove); selected.append(el); btn.remove(); sync();
+}
+available.addEventListener('click',e=>{const btn=e.target.closest('.available-person');if(btn)select(btn)});
+Array.from(available.querySelectorAll('button')).forEach(select);
+})();
+</script>
+{% endblock %}

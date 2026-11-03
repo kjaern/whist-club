@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Serveradministration</h1>
+  <p><a href="/admin/accounts">Konti</a> · <strong>AI-fotoimport</strong></p>
+  <p class="muted">AI-import bruger serverens egen API-nøgle. Kun serveradministratoren kan ændre indstillingerne her.</p>
+
+  <section class="card">
+    <h2>AI-udbyder</h2>
+    {% if notice == 'llm' %}<p role="status">AI-udbyderen er gemt.</p>{% endif %}
+    {% if notice == 'llm_removed' %}<p role="status">AI-udbyderen er fjernet, og AI-import er slået fra.</p>{% endif %}
+    {% if error and error_section == 'llm' %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+    {% if llm_settings.disabled %}
+      <p>AI-import er slået fra.</p>
+    {% elif llm_settings.configured %}
+      <p>Bruger <strong>{{ llm_settings.model }}</strong> på {{ llm_settings.base_url }}.</p>
+    {% else %}
+      <p>Ingen AI-udbyder er konfigureret.</p>
+    {% endif %}
+    <p class="muted">{% if llm_settings.has_api_key %}En API-nøgle er gemt. Den vises aldrig her; lad feltet stå tomt for at beholde den.{% else %}En API-nøgle er valgfri for udbydere, der ikke kræver den.{% endif %}</p>
+    <form method="post" action="/admin/ai/llm">
+      <label>Base URL
+        <input name="base_url" type="url" value="{{ llm_form_values.get('base_url', llm_settings.base_url) }}" placeholder="https://api.example.com/v1" required>
+      </label>
+      <label>Model
+        <input name="model" value="{{ llm_form_values.get('model', llm_settings.model) }}" maxlength="200" required>
+      </label>
+      <label>API-nøgle
+        <input name="api_key" type="password" autocomplete="new-password" placeholder="{% if llm_settings.has_api_key %}Gemt — tomt felt beholder nøglen{% else %}Indtast API-nøgle, hvis påkrævet{% endif %}">
+      </label>
+      <button type="submit">Gem AI-udbyder</button>
+    </form>
+    {% if llm_settings.can_remove %}
+      <form method="post" action="/admin/ai/llm/remove" style="margin-top:.75rem">
+        <button type="submit" class="secondary">Fjern AI-udbyder</button>
+      </form>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Grænser pr. import</h2>
+    {% if notice == 'limits' %}<p role="status">Grænserne er gemt.</p>{% endif %}
+    {% if error and error_section == 'limits' %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+    <p class="muted">Prisen afhænger af fotoene, der sendes, og af svarets længde. Ventetiden styrer kun, hvor længe appen venter; udbyderen kan stadig tage betaling for et svar, der kommer for sent.</p>
+    <form method="post" action="/admin/ai/limits">
+      <label>Højst antal fotos
+        <input name="max_images" type="number" min="1" max="30" value="{{ limits.max_images }}" required>
+      </label>
+      <label>Højst samlet fotostørrelse (MB)
+        <input name="max_total_mb" type="number" min="1" max="70" value="{{ limits.max_total_mb }}" required>
+      </label>
+      <label>Højst svarlængde (tokens)
+        <input name="max_tokens" type="number" min="1000" max="200000" step="1000" value="{{ limits.max_tokens }}" required>
+      </label>
+      <label>Ventetid (sekunder)
+        <input name="timeout" type="number" min="10" max="900" value="{{ limits.timeout }}" required>
+      </label>
+      <button type="submit">Gem grænser</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Klubber</h2>
+    <p class="muted">Vælg, hvilke klubber der må bruge AI-import. AI-noterne sendes med til modellen ved klubbens fotoimport, fx kælenavne på arkene eller bekræftede eksempler fra klubbens egne aftener. De gemmes i databasen, ikke i koden.</p>
+    {% for club in clubs %}
+      <form method="post" action="/admin/ai/clubs/{{ club.id }}" id="club-{{ club.id }}" class="ai-club">
+        <h3>{{ club.name }}</h3>
+        {% if notice == 'club-' ~ club.id %}<p role="status">Gemt.</p>{% endif %}
+        {% if error and error_section == 'club-' ~ club.id %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+        <label class="check"><input type="checkbox" name="allow_ai_import" value="true" {% if club.allow_ai_import %}checked{% endif %} {% if not llm_settings.configured and not club.allow_ai_import %}disabled{% endif %}> Tillad AI-import</label>
+        <label>AI-noter
+          <textarea name="ai_notes" rows="6" maxlength="{{ max_ai_notes }}" placeholder="Fx kælenavne på arkene eller særlige forkortelser.">{{ club.ai_notes }}</textarea>
+        </label>
+        <button type="submit">Gem for {{ club.name }}</button>
+      </form>
+    {% endfor %}
+  </section>
+{% endblock %}

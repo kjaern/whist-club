@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Aktuelle importer</h1>
+<p>AI-transskriptioner, der er klar til gennemgang. Rettelser gemmes automatisk.</p>
+{% if drafts %}
+<section class="card"><ul>
+{% for draft in drafts %}
+<li><a href="/import/current/{{draft.id}}">{{draft.title}}</a> — {{draft.date}} · {{draft.hands}} hænder · <a href="/import/current/{{draft.id}}">Fortsæt</a></li>
+{% endfor %}
+</ul></section>
+{% else %}<p>Ingen gemte importer endnu.</p>{% endif %}
+<p><a href="/import">← Ny import</a></p>
+{% endblock %}

@@ -1,0 +1,213 @@
+<div id="new-hand-area">
+  <section class="card hand-entry">
+    <div class="section-heading">
+      <h2>
+        Ny hånd
+      </h2>
+      <div class="entry-heading-actions">
+        <span class="muted">Rotation: {{'Fire i træk' if session.rotation_mode=='consecutive' else 'To, pause, to'}}</span>
+      </div>
+    </div>
+    <form hx-post="/sessions/{{session.id}}/hands" hx-target="#session-content" id="new-hand-form">
+      <input type="hidden" name="origin_client_id" class="origin-client-id">
+      <div class="hand-players">
+        <div class="section-heading">
+          <strong>Spillere denne hånd</strong><span class="muted">Vælg 4 · foreslået efter rotation · klik for at ændre</span>
+        </div>
+        <div class="player-roster">
+          {% for p in players %}
+            <div class="roster-person
+            {% if not p.active %}
+              roster-inactive
+            {% endif %}
+            ">
+            <label class="player-choice"><input type="checkbox" name="participants" value="{{p.id}}"
+            {% if p.id in suggested %}
+              checked
+            {% endif %}
+            {% if not p.active %}
+              disabled
+            {% endif %}
+            ><span>{{p.name}}</span></label>
+            <button class="player-status" type="button" hx-post="/sessions/{{session.id}}/players/{{p.id}}/toggle" hx-target="#session-content" title="{{'Markér som gået' if p.active else 'Aktivér igen'}}">{{'Aktiv' if p.active else 'Gået'}}</button>
+          </div>
+        {% endfor %}
+      </div>
+      <details class="seating-editor">
+        <summary>
+          Ændr bordrækkefølge
+        </summary>
+        <div class="seating-items" aria-label="Bordrækkefølge">
+          {% for p in players %}
+            <div class="seating-item" data-player-id="{{p.id}}">
+              <input type="hidden" form="seating-order-form" name="order" value="{{p.id}}">
+              <span class="drag-handle" role="button" tabindex="0" aria-label="Træk {{p.name}} for at ændre rækkefølgen">☰</span>
+              <span class="seat-name">{{p.name}}</span>
+            </div>
+          {% endfor %}
+        </div>
+        <p class="seating-hint muted">
+          Træk i håndtaget for at ændre rækkefølgen. Gemmes automatisk.
+        </p>
+      </details>
+      <div class="roster-add">
+        <label for="roster-new-name">Ny spiller</label><input id="roster-new-name" name="name" placeholder="Tilføj en spiller" autocomplete="off"><label for="roster-before">Indsæt før</label><select id="roster-before" name="before_player"><option value="0">Sidst</option>
+        {% for p in players %}
+          <option value="{{p.id}}">{{p.name}}</option>
+        {% endfor %}
+        </select><button type="button" hx-post="/sessions/{{session.id}}/players" hx-include="#roster-new-name,#roster-before" hx-target="#session-content">Tilføj spiller</button>
+      </div>
+    </div>
+    <div class="hand-fields">
+      <label>Melder<select name="declarer" required>
+      {% for p in players if p.id in suggested %}
+        <option value="{{p.id}}"
+        {% if p.id in suggested[:1] %}
+          selected
+        {% endif %}
+        >{{p.name}}</option>
+      {% endfor %}
+      </select></label>
+      <label>Melding<select name="bid_key" hx-get="/sessions/{{session.id}}/bid-fields" hx-trigger="change" hx-include="this" hx-target="#target-fields">
+      {% set playable = enabled_bids|default(rules.bids.keys()|list) %}
+      {% for key,bid in rules.bids.items() if key in playable and key not in ['vip2','vip3'] %}
+        <option value="{{key}}">{{'VIP' if key=='vip1' else bid.label}}</option>
+      {% endfor %}
+      </select></label>
+      <label id="vip-level-field" hidden>VIP niveau<select id="vip-level"><option value="vip1">1</option><option value="vip2">2</option><option value="vip3">3</option></select></label>
+      <div id="target-fields">
+        {% set bid=rules.bids[playable|first] %}
+        {% include 'partials/target.html' %}
+      </div>
+    </div>
+    <div class="result-entry">
+      <h3>
+        Resultat for ny hånd
+      </h3>
+      <p class="muted">
+        Hånden gemmes først, når resultatet er udfyldt og du trykker Gem hånd.
+      </p>
+      <div id="normal-result" class="result-grid">
+        <label>Makker (melder = solo)<select name="partner" id="new-partner">
+        {% for p in players if p.id in suggested %}
+          <option value="{{p.id}}">{{p.name}}</option>
+        {% endfor %}
+        </select></label>
+        <label>Faktiske stik<select name="actual">
+        {% for n in range(14) %}
+          <option value="{{n}}"
+          {% if n==8 %}
+            selected
+          {% endif %}
+          >{{n}}</option>
+        {% endfor %}
+        </select></label>
+      </div>
+      <div id="special-result" hidden>
+        <div id="going-options" class="choices">
+        </div>
+        <div id="special-tricks" class="result-grid">
+          {% for p in active %}
+            <label class="special-actual" data-player="{{p.id}}">{{p.name}} · stik<select name="actual_{{p.id}}">
+            {% for n in range(14) %}
+              <option value="{{n}}">{{n}}</option>
+            {% endfor %}
+            </select></label>
+          {% endfor %}
+        </div>
+      </div>
+      <button class="save-bid"
+      {% if active|length<4 %}
+        disabled
+      {% endif %}
+      >Gem hånd og resultat</button>
+      <button class="secondary" type="reset">Nulstil</button>
+    </div>
+  </form>
+</section>
+<form id="seating-order-form" hx-post="/sessions/{{session.id}}/seats" hx-target="#session-content" hx-swap="innerHTML">
+</form>
+<script>
+(function(){
+const form=document.getElementById('new-hand-form');if(!form)return;
+form.querySelector('.origin-client-id').value=window.whistClientId || '';
+const bid=form.querySelector('[name=bid_key]'), declarer=form.querySelector('[name=declarer]');
+const vipLevel=document.getElementById('vip-level'),vipField=document.getElementById('vip-level-field');
+const normal=document.getElementById('normal-result'), special=document.getElementById('special-result');
+const going=document.getElementById('going-options');
+const names=Array.from(form.querySelectorAll('[name=participants]')).map(el=>({id:el.value,name:el.closest('label').querySelector('span').textContent,el}));
+function update(){
+const selected=names.filter(p=>p.el.checked&&!p.el.disabled);
+const isVip=['vip1','vip2','vip3'].includes(bid.value);
+vipField.hidden=!isVip;
+if(isVip)vipLevel.value=bid.value;
+const previousDeclarer=declarer.value;
+declarer.replaceChildren(...selected.map(p=>new Option(p.name,p.id)));
+if(selected.some(p=>p.id===previousDeclarer))declarer.value=previousDeclarer;
+const partner=form.querySelector('[name=partner]');
+const previousPartner=partner.value;
+partner.replaceChildren(...selected.map(p=>new Option(p.name+(p.id===declarer.value?' (selvmakker)':''),p.id)));
+if(selected.some(p=>p.id===previousPartner))partner.value=previousPartner;
+const isSpecial=['sol','ren_sol','bordlaegger','paskrig'].includes(bid.value), isPaskrig=bid.value==='paskrig';
+normal.hidden=isSpecial;special.hidden=!isSpecial;
+if(isSpecial){
+const oldGoing=new Set(Array.from(going.querySelectorAll('input:checked')).map(x=>x.value));
+going.replaceChildren();
+if(!isPaskrig){const label=document.createElement('strong');label.textContent='Gå med: ';going.append(label);
+for(const p of selected.filter(p=>p.id!==declarer.value)){
+const wrapper=document.createElement('label');wrapper.className='chip';const check=document.createElement('input');check.type='checkbox';check.name='going';check.value=p.id;check.checked=oldGoing.has(p.id);wrapper.append(check,document.createTextNode(p.name));going.append(wrapper);
+}}
+}
+const bidders=new Set(isPaskrig?selected.map(p=>p.id):[declarer.value,...Array.from(going.querySelectorAll('input:checked')).map(x=>x.value)]);
+form.querySelectorAll('.special-actual').forEach(el=>{el.hidden=!isSpecial||!bidders.has(el.dataset.player)});
+const save=form.querySelector('.save-bid');if(save)save.disabled=selected.length!==4;
+}
+vipLevel.addEventListener('change',()=>{if(!Array.from(bid.options).some(o=>o.value===vipLevel.value)){bid.add(new Option('VIP '+vipLevel.value.slice(-1),vipLevel.value));}bid.value=vipLevel.value;bid.dispatchEvent(new Event('change',{bubbles:true}));});
+form.addEventListener('change',e=>{if(e.target.matches('[name=participants],[name=declarer],[name=bid_key],[name=going]'))update()});
+form.addEventListener('reset',()=>setTimeout(update,0));
+update();
+})();
+</script>
+<script>
+(function(){
+  const form=document.getElementById('seating-order-form');
+  const list=document.querySelector('.seating-editor .seating-items');
+  if(!form||!list)return;
+  let moving=null, pointerId=null, startY=0, changed=false;
+  const handles=list.querySelectorAll('.drag-handle');
+  function save(){if(changed){changed=false;form.requestSubmit();}}
+  handles.forEach(handle=>{
+    handle.addEventListener('pointerdown',e=>{
+      if(e.button!==0)return;
+      moving=handle.closest('.seating-item');pointerId=e.pointerId;startY=e.clientY;changed=false;
+      handle.setPointerCapture(e.pointerId);
+      moving.classList.add('is-dragging');
+      e.preventDefault();
+    });
+    handle.addEventListener('pointermove',e=>{
+      if(!moving||e.pointerId!==pointerId)return;
+      if(Math.abs(e.clientY-startY)<5&&!changed)return;
+      const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('.seating-item');
+      if(!target||target===moving||target.parentElement!==list)return;
+      const midpoint=target.getBoundingClientRect().top+target.getBoundingClientRect().height/2;
+      const before=e.clientY<midpoint?target:target.nextElementSibling;
+      if(before!==moving&&before!==moving.nextElementSibling){list.insertBefore(moving,before);changed=true;}
+    });
+    function finish(e){
+      if(!moving||e.pointerId!==pointerId)return;
+      moving.classList.remove('is-dragging');moving=null;pointerId=null;save();
+    }
+    handle.addEventListener('pointerup',finish);
+    handle.addEventListener('pointercancel',finish);
+    // Keyboard alternative without taking up screen space.
+    handle.addEventListener('keydown',e=>{
+      if(e.key!=='ArrowUp'&&e.key!=='ArrowDown')return;
+      e.preventDefault();
+      const el=handle.closest('.seating-item');
+      if(e.key==='ArrowUp'&&el.previousElementSibling){list.insertBefore(el,el.previousElementSibling);changed=true;save();handle.focus();}
+      if(e.key==='ArrowDown'&&el.nextElementSibling){list.insertBefore(el.nextElementSibling,el);changed=true;save();handle.focus();}
+    });
+  });
+})();
+</script>
+</div>

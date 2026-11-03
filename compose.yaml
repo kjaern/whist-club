@@ -1,0 +1,46 @@
+services:
+  whist:
+    build:
+      context: .
+    restart: unless-stopped
+    user: "${WHIST_UID:-10001}:${WHIST_GID:-10001}"
+    environment:
+      WHIST_LLM_BASE_URL: ${WHIST_LLM_BASE_URL:-}
+      WHIST_LLM_MODEL: ${WHIST_LLM_MODEL:-}
+      WHIST_LLM_API_KEY: ${WHIST_LLM_API_KEY:-}
+      WHIST_LLM_TIMEOUT: ${WHIST_LLM_TIMEOUT:-}
+      WHIST_LLM_MAX_IMAGES: ${WHIST_LLM_MAX_IMAGES:-}
+      WHIST_LLM_MAX_TOTAL_BYTES: ${WHIST_LLM_MAX_TOTAL_BYTES:-}
+      WHIST_LLM_MAX_TOKENS: ${WHIST_LLM_MAX_TOKENS:-}
+    volumes:
+      - ./config:/var/lib/whist/config
+      - ./data:/var/lib/whist/data:rw
+    networks:
+      - whist_private
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - whist
+    networks:
+      - whist_private
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+networks:
+  whist_private:
+    driver: bridge

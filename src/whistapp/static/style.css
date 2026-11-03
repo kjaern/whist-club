@@ -1,0 +1,306 @@
+:root{font-family:system-ui,-apple-system,sans-serif;color:#eaf0f4;background:#111b23;color-scheme:dark}*{box-sizing:border-box}body{margin:0}header{padding:16px max(18px,calc((100vw - 760px)/2));background:#192b34;display:flex;justify-content:space-between;align-items:center}header a{font-weight:800;font-size:1.4rem;color:#fff;text-decoration:none}header small,.muted,small{color:#aabcc5}main{max-width:760px;margin:auto;padding:16px}h1{font-size:1.65rem}h2{font-size:1.18rem;margin:0 0 15px}.card{background:#1c2c35;border:1px solid #344650;border-radius:14px;padding:18px;margin:16px 0}form{display:grid;gap:14px}label{display:grid;gap:6px;font-weight:600}input,select,textarea,button{font:inherit;border-radius:8px;padding:11px;border:1px solid #566a75;background:#10212a;color:white;min-width:0}button{background:#3a9a7c;border:0;font-weight:700;cursor:pointer}button:hover{filter:brightness(1.12)}button.secondary{background:#344650;font-size:.8rem;padding:7px 10px}.choices{display:flex;flex-wrap:wrap;gap:8px}.chip{display:flex;gap:7px;align-items:center;background:#2b414b;border-radius:8px;padding:9px;font-weight:500}.chip input{accent-color:#4dc6a0}.fixed{display:block;padding:10px;background:#10212a;border-radius:8px}.scoreboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px}.scoreboard>div{background:#10212a;border-radius:9px;padding:12px;display:grid;gap:5px}.scoreboard strong{font-size:1.7rem}.hand{border-top:1px solid #344650;padding:15px 0;position:relative}.hand-title{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.hand p{margin:10px 0}.inline{display:flex;align-items:end;flex-wrap:wrap;gap:10px}.inline label{flex:1}.delete{margin-top:10px;display:block}.pill{display:inline-block;border-radius:20px;padding:4px 10px;margin-right:8px}.win{background:#235b45}.loss{background:#743d42}a{color:#72d7b4}summary{cursor:pointer}@media(max-width:500px){.card{padding:14px}.inline button{width:100%}}
+
+.table-scroll{overflow-x:auto}.night{border-collapse:collapse;width:100%;font-size:.84rem}.night th,.night td{border:1px solid #d9dee7;padding:4px 7px;vertical-align:top;min-width:90px}.night td:first-child,.night th:first-child{min-width:30px}.night .declared{background:#eaf3ff}.night .sitting-out{background:#f3f3f3;color:#777}.night .running{font-weight:700;text-align:right}.night .actions td{padding:2px 6px;background:#fafafa}.night .actions form,.night .actions details{display:inline-block;margin-right:8px}.night .actions button{padding:3px 8px}.night tfoot{background:#e7edf6}.night small{font-size:.72rem}
+.night th,.night td{border-color:#40545e;background:#192b34;color:#eaf0f4}.night .declared{background:#244c50}.night .sitting-out{background:#16232b;color:#91a4ad}.night .actions td{background:#23343d}.night tfoot th{background:#284e45}.night .change{font-size:.76rem;color:#9de1c5}.night .running{font-weight:800}.night .actions select{padding:4px}.night .actions form{display:inline-flex;align-items:end;gap:8px}.night .actions label{font-size:.75rem}
+
+/* v4: one compact scoreboard row per hand, inline edit in rightmost cell */
+.night{font-size:.79rem;white-space:nowrap}.night th,.night td{padding:3px 5px;min-width:72px;vertical-align:middle}.night td:first-child,.night th:first-child{min-width:25px}.night .edit-cell,.night .edit-head{min-width:42px;width:42px}.night .cell-line{display:flex;align-items:center;gap:4px;min-height:21px}.night .bid-label{font-weight:700}.night .actual{color:#a6d4ff}.night .actual:before{content:'→';margin-right:2px}.night .delta{font-size:.73rem;color:#9de1c5}.night .running{font-weight:800;margin-left:auto;padding-left:5px}.night .partner-mark{font-size:.72rem;color:#a6d4ff}.night .edit-cell{position:relative}.night .row-editor summary{list-style:none;background:#344650;padding:3px 7px;border-radius:5px;font-size:.75rem;font-weight:600;cursor:pointer}.night .row-editor summary::-webkit-details-marker{display:none}.night .row-editor[open] summary{background:#3a9a7c}.night .editor-panel{position:absolute;right:0;top:100%;z-index:20;min-width:250px;max-width:min(340px,90vw);white-space:normal;padding:12px;border:1px solid #566a75;border-radius:9px;background:#1c2c35;box-shadow:0 8px 24px #0008}.night .editor-panel form{display:grid;gap:8px;margin:8px 0}.night .editor-panel label{font-size:.8rem}.night .editor-panel select{padding:6px}.night .editor-panel button{padding:7px}.night .editor-heading{font-weight:700}
+
+/* v5: readable night setup and compact entry form */
+main{max-width:1080px;width:100%;padding:clamp(12px,2.5vw,28px)}
+.setup-card{max-width:760px;margin-inline:auto}.setup-form{display:grid;gap:18px}
+.setup-form textarea{width:100%;min-height:190px;resize:vertical;line-height:1.5}
+.setup-form input{width:100%}.setup-form fieldset{border:1px solid #566a75;border-radius:10px;padding:14px;min-width:0}
+.setup-form legend{padding:0 8px;font-weight:700}.setup-form .radio-option{display:flex;align-items:center;gap:12px;padding:8px 0;font-weight:500}
+.setup-form .radio-option input{width:auto;flex:0 0 auto}.setup-form button{width:fit-content;min-width:180px}
+.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.section-heading h2{margin-bottom:0}.hand-entry form{gap:12px}.hand-players{display:grid;gap:9px}
+.selected-players{display:flex;flex-wrap:wrap;gap:6px}.player-pill{padding:5px 10px;border-radius:20px;background:#304a55;font-size:.85rem}
+.text-button{background:transparent;color:#72d7b4;border:0;padding:3px 5px;font-size:.85rem}
+.hand-fields{display:grid;grid-template-columns:minmax(110px,1fr) minmax(135px,1.3fr) minmax(100px,.7fr) auto;gap:10px;align-items:end}
+.hand-fields label{font-size:.85rem}.hand-fields input,.hand-fields select,.hand-fields button{padding:8px 9px}
+.hand-fields .save-bid{white-space:nowrap}.hand-fields #target-fields{min-width:0}.hand-fields #target-fields .fixed{font-size:.8rem;padding:8px}
+.hand-fields #target-fields .choices{gap:3px}.hand-fields #target-fields .chip{padding:3px 5px;font-size:.8rem}
+.roster-card{padding:12px 18px}.roster-card summary{font-weight:700}.roster-card details[open]{display:grid;gap:12px}.roster-card .choices{margin-top:12px}.roster-card .add-player{margin-top:12px}
+@media(max-width:700px){.hand-fields{grid-template-columns:1fr 1fr}.hand-fields .save-bid{grid-column:1/-1}.setup-card{padding:18px}}
+@media(max-width:400px){.hand-fields{grid-template-columns:1fr}.hand-fields .save-bid{grid-column:auto}}
+
+/* v6: night creation occupies the available page width */
+.setup-card{max-width:none;width:100%;margin:16px 0}
+.setup-form{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;column-gap:24px}
+.setup-form>label:first-child{grid-column:1/-1}
+.setup-form>label:nth-child(2){grid-column:1;grid-row:2 / span 2}
+.setup-form>fieldset{grid-column:2;grid-row:2}
+.setup-form>button{grid-column:2;grid-row:3;justify-self:start}
+.setup-form textarea{min-height:250px}
+@media(max-width:700px){.setup-form{grid-template-columns:minmax(0,1fr)}.setup-form>label:first-child,.setup-form>label:nth-child(2),.setup-form>fieldset,.setup-form>button{grid-column:1;grid-row:auto}.setup-form>button{width:100%}}
+
+/* v7: use the entire viewport; visible roster and immediately accessible results */
+main{max-width:none;width:100%;margin:0;padding:clamp(12px,1.8vw,30px)}
+header{padding:14px clamp(12px,1.8vw,30px)}
+.card{width:100%}
+.player-roster{display:flex;flex-wrap:wrap;gap:7px}
+.roster-person{display:flex;align-items:stretch;background:#283f4a;border:1px solid #49616b;border-radius:9px;overflow:hidden}
+.player-choice{display:flex;align-items:center;gap:7px;padding:8px 11px;cursor:pointer;font-size:.88rem}
+.player-choice input{accent-color:#4dc6a0;width:17px;height:17px}
+.player-status{background:#35554e;border-radius:0;padding:5px 9px;font-size:.72rem}
+.roster-inactive{opacity:.58}.roster-inactive .player-status{background:#644b4b}
+.add-player-bar{margin:0 0 12px}.add-player-bar form{display:flex;gap:9px;align-items:end}.add-player-bar label{flex:0 1 330px;font-size:.82rem}.add-player-bar input{padding:7px 9px}.add-player-bar button{padding:9px}
+.night .row-editor[open] .editor-panel{min-width:270px}
+@media(max-width:650px){.add-player-bar label{flex:1}.night{font-size:.75rem}}
+
+/* v8: equal player columns based on bid + target + actual + delta (not running total). */
+.table-scroll{width:100%;overflow-x:auto;overflow-y:visible}
+.night{table-layout:fixed;width:max-content;min-width:100%;border-collapse:collapse}
+.night col.hand-column{width:42px}
+.night col.player-column{width:var(--player-column-width,220px)}
+.night col.edit-column{width:55px}
+.night th,.night td{min-width:0;width:auto;box-sizing:border-box}
+.night .cell-line{white-space:nowrap;gap:5px}
+.night .running{margin-left:auto}
+/* The editor must not be constrained by the table's scrolling box. */
+.night .row-editor[open] .editor-panel{
+  position:fixed;z-index:1000;
+  left:50%;right:auto;top:10vh;bottom:8vh;
+  transform:translateX(-50%);
+  width:min(540px,calc(100vw - 24px));max-width:none;min-width:0;
+  max-height:82vh;overflow-y:auto;overscroll-behavior:contain;
+  padding:clamp(16px,3vw,28px);
+  box-shadow:0 18px 70px #000d;
+}
+.night .editor-panel form{display:grid;gap:14px;margin:18px 0}
+.night .editor-panel label{font-size:1rem;white-space:normal}
+.night .editor-panel select{width:100%;min-height:46px;padding:10px}
+.night .editor-panel button{min-height:44px}
+.night .editor-heading{font-size:1.1rem;white-space:normal}
+.night .row-editor[open] summary{background:#3a9a7c}
+
+/* v9: restore the comfortable horizontal limit, keep the vertically spacious editor. */
+main{max-width:1080px;margin-inline:auto}
+header{padding-inline:max(18px,calc((100vw - 1080px)/2))}
+.night tfoot th.score-total{color:#fff;background-image:none;font-weight:800}
+.night .editor-panel .cancel-edit{width:100%;margin-top:4px}
+/* v12: result is entered before committing a hand; no popup for new hands */
+.setup-players{display:grid;gap:10px;grid-column:1;grid-row:2 / span 2}
+.setup-players .choices{margin:8px 0}
+.setup-players textarea{min-height:90px}
+.setup-form>fieldset{grid-column:2;grid-row:2}
+.setup-form>button{grid-column:2;grid-row:3}
+.result-entry{border-top:1px solid #40545e;padding-top:12px;display:grid;gap:12px}
+.result-entry h3{margin:0;font-size:1rem}
+.result-entry p{margin:0}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.result-entry [hidden],.result-grid [hidden]{display:none!important}
+.result-entry button{justify-self:start}
+@media(max-width:700px){.setup-players,.setup-form>fieldset,.setup-form>button{grid-column:1;grid-row:auto}}
+
+/* v13: use the viewport width, retain equal-sized player columns */
+main{max-width:none;width:100%;margin-inline:0}
+header{padding-inline:clamp(12px,1.8vw,30px)}
+.roster-add{display:flex;align-items:end;flex-wrap:wrap;gap:8px;margin-top:8px}
+.roster-add label{font-size:.85rem;flex-basis:100%}
+.roster-add input{flex:1;min-width:180px;max-width:380px;padding:8px 10px}
+.roster-add button{padding:9px 12px}
+
+/* Respect HTML hidden state even when form label display rules apply. */
+[hidden] { display: none !important; }
+
+/* Seat numbers belong to the club roster, not the game results. */
+.seat-choices .chip {display:inline-flex;align-items:center;gap:.35rem;flex-wrap:wrap}
+.seat-choices input.seat-number {width:4.2rem;min-width:4.2rem;padding:.25rem}
+.roster-add select {min-width:8rem}
+
+.live-heading{display:flex;align-items:center;gap:1rem;flex-wrap:wrap}.live-heading h1{margin-right:auto}.live-heading a{white-space:nowrap}
+
+/* v19: compact finance and mobile-friendly seating controls */
+.fee-inline{display:flex;align-items:end;gap:.45rem;flex-wrap:wrap}
+.fee-inline label{font-weight:650;white-space:nowrap;align-self:center}
+.fee-inline select{flex:1 1 115px;min-width:0;max-width:220px}
+.fee-inline button{white-space:nowrap}
+.fee-entries{display:flex;gap:.4rem;flex-wrap:wrap;margin:.7rem 0}
+.fee-entry{background:#edf3f5;border-radius:1rem;padding:.2rem .6rem;font-size:.88rem}
+.fee-remove{border:0;background:transparent;color:#9d2531;padding:0 .2rem;font-size:1.1rem}
+.night-actions{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:1rem 0}
+.night-actions form{margin:0}
+.seating-editor{margin:.7rem 0}.seating-items{display:flex;flex-direction:column;gap:.3rem;margin:.5rem 0}
+.seating-item{display:flex;align-items:center;gap:.5rem;padding:.25rem .5rem;border:1px solid #d5dfe4;border-radius:.45rem}
+.seating-item span:nth-of-type(2){flex:1}.seating-item button{padding:.25rem .55rem}
+.drag-handle{cursor:grab;touch-action:none}.settlement-list>div{display:flex;justify-content:space-between;max-width:360px;padding:.25rem 0}
+@media(max-width:500px){.fee-inline{gap:.35rem}.fee-inline label{width:100%}.fee-inline select{flex:1}.fee-inline button{flex:0 0 auto}}
+.seating-columns{display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin:.7rem 0}.available-players{display:flex;flex-direction:column;gap:.35rem;margin-top:.4rem}.available-person{text-align:left}.seating-columns .seating-items{min-height:4rem;margin-top:.4rem}.seating-columns .seating-item{min-width:0}.seating-columns .seating-item span:nth-child(2){min-width:0;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:500px){.seating-columns{grid-template-columns:1fr}.available-players{display:flex;flex-direction:row;flex-wrap:wrap}.seating-columns .seating-item{max-width:100%}}
+
+/* New-night seating: isolate controls from generic form button styles. */
+.setup-card .seating-columns { min-width:0; }
+.setup-card .seating-items { width:100%; min-width:0; }
+.setup-card .seating-items > .seating-item {
+  display:grid; grid-template-columns:32px minmax(0,1fr) 30px;
+  align-items:center; gap:6px; width:100%; min-width:0;
+  padding:4px 6px; min-height:42px;
+  background:#243a45; color:#eaf0f4; border:1px solid #49616b;
+}
+.setup-card .seating-item.is-dragging { background:#345363; color:#fff; outline:2px solid #72d7b4; }
+.setup-card .seating-item .drag-handle {
+  display:flex; align-items:center; justify-content:center; width:32px; height:32px;
+  cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none;
+}
+.setup-card .seating-item .seat-name {
+  display:block; min-width:0; width:auto; flex:none; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; color:inherit;
+}
+.setup-card .seating-item .seat-controls { display:none; }
+/* These are deliberately scoped more tightly than .setup-form button. */
+.setup-card .setup-form .seating-item button.seat-move,
+.setup-card .setup-form .seating-item button.seat-remove {
+  display:inline-flex; align-items:center; justify-content:center;
+  box-sizing:border-box; width:30px; min-width:0; max-width:30px;
+  height:30px; min-height:0; margin:0; padding:0;
+  flex:none; justify-self:center; border-radius:6px;
+  font-size:17px; line-height:1; appearance:none; -webkit-appearance:none;
+}
+@media (pointer:coarse) {
+  .setup-card .seating-items > .seating-item {
+    grid-template-columns:minmax(0,1fr) 66px 30px;
+  }
+  .setup-card .seating-item .drag-handle { display:none; }
+  .setup-card .seating-item .seat-controls {
+    display:grid; grid-template-columns:30px 30px; gap:6px; min-width:0;
+  }
+}
+@media (max-width:500px) {
+  .setup-card .seating-columns { grid-template-columns:minmax(0,1fr); }
+  .setup-card .available-players { flex-direction:row; flex-wrap:wrap; }
+}
+
+/* v19.1: actual selector for the setup form (the form itself has both classes). */
+.setup-form #selected-seats > .seating-item {
+  display:flex !important; flex-flow:row nowrap !important; align-items:center;
+  gap:6px; width:100%; min-width:0; padding:4px 6px;
+  background:#243a45; color:#eaf0f4;
+}
+.setup-form #selected-seats .seat-name {
+  flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; color:#eaf0f4;
+}
+.setup-form #selected-seats .seat-controls { display:none; }
+.setup-form #selected-seats button.seat-move,
+.setup-form #selected-seats button.seat-remove {
+  display:inline-flex !important; align-items:center; justify-content:center;
+  flex:0 0 30px !important; width:30px !important;
+  min-width:30px !important; max-width:30px !important;
+  height:30px !important; min-height:30px !important; max-height:30px !important;
+  margin:0 !important; padding:0 !important;
+  font-size:17px; line-height:1; border-radius:6px;
+  -webkit-appearance:none; appearance:none;
+}
+@media (pointer:coarse), (max-width:600px) {
+  .setup-form #selected-seats .drag-handle { display:none !important; }
+  .setup-form #selected-seats .seat-controls {
+    display:flex !important; flex:0 0 66px; flex-flow:row nowrap;
+    align-items:center; gap:6px; width:66px; min-width:66px;
+  }
+}
+
+.rotation-notice:not([hidden]) { display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; padding:0.65rem; margin-bottom:0.75rem; border:1px solid currentColor; border-radius:0.5rem; }
+.rotation-notice button { width:auto !important; max-width:max-content; flex:0 0 auto; padding:0.35rem 0.6rem; }
+
+/* Authentication and financial entries */
+.logout-form{display:block;margin:0}.logout-form button{width:auto!important;min-width:0!important;padding:7px 12px!important}
+.fee-entries{display:flex;flex-wrap:wrap;gap:6px}.fee-entry{display:inline-flex;align-items:center;gap:4px;background:#263e48!important;color:#f0f7fa!important;border:1px solid #52717e;border-radius:6px;padding:4px 8px}.fee-entry .fee-remove{width:26px!important;min-width:26px!important;max-width:26px!important;height:26px;padding:0!important;flex:0 0 26px;color:#fff;background:#854348}
+
+.bid-rule-source pre {overflow-x:auto;white-space:pre;max-width:100%;padding:1rem;background:#17212b;color:#eef4fa;border-radius:6px;font-size:.8rem;line-height:1.5}
+
+/* Compact hand-entry and rules dialog */
+.hand-entry{padding:12px 16px;margin:10px 0}
+.hand-entry .section-heading{gap:8px}
+.hand-entry .entry-heading-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.hand-entry form{gap:8px}
+.hand-entry .hand-players{gap:5px}
+.hand-entry .player-choice{padding:5px 9px}
+.hand-entry .roster-add{display:flex;flex-wrap:nowrap;align-items:center;gap:7px;margin-top:3px}
+.hand-entry .roster-add label{flex:0 0 auto;font-size:.78rem;white-space:nowrap}
+.hand-entry .roster-add input{flex:1 1 140px;min-width:75px;max-width:none;padding:6px 8px}
+.hand-entry .roster-add select{flex:0 1 155px;min-width:70px;padding:6px 8px}
+.hand-entry .roster-add button{flex:0 0 auto;padding:7px 9px;white-space:nowrap}
+.hand-entry .result-entry h3{margin:4px 0}
+.hand-entry .result-entry p{margin:3px 0 7px}
+.rules-dialog{width:min(760px,calc(100vw - 24px));max-height:85dvh;overflow:auto;border:1px solid #566a75;border-radius:12px;background:#1c2c35;color:#eaf0f4;padding:14px;box-shadow:0 18px 60px #000b}
+.rules-dialog::backdrop{background:#0009}
+.rules-dialog-heading,.rules-navigation{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.rules-dialog #bid-rules-panel{overflow:auto;max-width:100%}
+.rules-dialog pre{overflow:auto;max-width:100%}
+.night .delta.delta-positive{color:#8dc5a5}
+.night .delta.delta-negative{color:#d49a9a}
+@media(max-width:620px){
+ .hand-entry .roster-add{flex-wrap:wrap}
+ .hand-entry .roster-add input{flex:1 1 45%}
+ .hand-entry .roster-add select{flex:1 1 30%}
+ .hand-entry .roster-add label{font-size:.72rem}
+ .hand-entry .roster-add button{padding:6px 8px}
+ .hand-entry .entry-heading-actions{gap:7px}
+ .hand-entry .entry-heading-actions .muted{font-size:.72rem}
+}
+
+.header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.header-actions #show-bid-rules{white-space:nowrap}
+
+/* Statistics navigation and accessible header explanations */
+.stats-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stats-night-link { white-space: nowrap; }
+
+.stats-heading-button {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: inherit;
+  border-bottom: none;
+  text-decoration: none;
+}
+.stats-heading-button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* Build identification, unobtrusive at the bottom left. */
+.build-info { margin-top: 2rem; padding: 0.5rem 1rem; font-size: 0.75rem; opacity: 0.6; text-align: left; }
+
+/* Header navigation links look like the secondary buttons beside them. */
+.header-actions a { display: inline-block; background: #344650; color: white; font-size: .8rem; font-weight: 700; padding: 7px 10px; border-radius: 8px; white-space: nowrap; }
+.header-actions a:hover { filter: brightness(1.12); }
+
+/* Narrow screens: let header buttons wrap instead of widening the page. */
+@media (max-width: 700px) { header { flex-wrap: wrap; gap: 8px; } .header-actions { flex-wrap: wrap; flex-shrink: 1; justify-content: flex-end; } }
+
+/* Club page: one aligned row per bid, a fixed name column and up to three values. */
+.bid-settings { display: grid; gap: .6rem; margin: .5rem 0 1rem; }
+.bid-setting { display: grid; grid-template-columns: 9.5rem repeat(3, minmax(0, 6.5rem)); gap: .6rem; align-items: end; }
+.bid-setting label { font-weight: 600; font-size: .85rem; }
+.bid-setting input:not([type=checkbox]) { width: 100%; padding: 8px; }
+.bid-setting .bid-toggle { display: flex; align-items: center; gap: .45rem; font-size: 1rem; padding-bottom: 9px; }
+.bid-setting .bid-toggle input { width: 1.1rem; height: 1.1rem; accent-color: #4dc6a0; }
+@media (max-width: 500px) { .bid-setting { grid-template-columns: 1fr repeat(3, minmax(0, 4.5rem)); } }
+
+/* Rules dialog: the club's configured values above the bid source. */
+.bid-rule-values { border-collapse: collapse; margin: .25rem 0 1rem; }
+.bid-rule-values th, .bid-rule-values td { text-align: left; padding: .35rem .8rem .35rem 0; border-bottom: 1px solid #344650; }
+.bid-rule-values tr:first-child th { color: #aabcc5; font-size: .8rem; }
+
+/* Form errors must stand out: a failed save otherwise looks like nothing happened. */
+.error { background: #4a2328; border: 1px solid #c4545e; color: #ffd9dc; border-radius: 8px; padding: .7rem .9rem; font-weight: 600; }
+.check { display: flex; align-items: center; gap: .5rem; }
+.check input { width: 1.1rem; height: 1.1rem; accent-color: #4dc6a0; }
+.ai-club + .ai-club { border-top: 1px solid #344650; padding-top: 14px; margin-top: 14px; }
+.ai-club h3 { margin: 0; }

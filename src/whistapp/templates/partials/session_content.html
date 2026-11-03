@@ -1,0 +1,74 @@
+{% if session.ended_at %}
+  {% set show_live_settlement = false %}
+  {% include "partials/live_scoreboard.html" %}
+{% else %}
+  {% include 'partials/new_hand_area.html' %}
+  {% include 'partials/editor_results.html' %}
+{% endif %}
+<section class="card finance-card">
+  <div class="section-heading">
+    <h2>
+      Klubkasse
+    </h2>
+    <span class="muted">Point og penge holdes adskilt</span>
+  </div>
+  {% if not session.ended_at %}
+    <form class="fee-inline" hx-post="/sessions/{{session.id}}/penalties" hx-target="#session-content">
+      <label for="fee-player">Fejl40 · {{fee}} kr</label>
+      <select id="fee-player" name="player_id" required>
+      {% for p in players %}
+        <option value="{{p.id}}">{{p.name}}</option>
+      {% endfor %}
+      </select>
+      <button type="submit">+ Tilføj</button>
+    </form>
+  {% endif %}
+  {% if penalties %}
+    <div class="fee-entries">
+      {% for item in penalties %}
+        <span class="fee-entry">{{item.name}} · {{item.amount}} kr
+        {% if not session.ended_at %}
+          <button class="fee-remove" type="button" title="Fjern" hx-post="/sessions/{{session.id}}/penalties/{{item.id}}/delete" hx-target="#session-content">×</button>
+        {% endif %}
+        </span>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <p>
+    <strong>Fejl40 i alt: {{penalty_total}} kr</strong>
+  </p>
+  {% if settled %}
+    <h3>
+      {{ money_mode_label|default('Pladsbetaling') }}
+    </h3>
+    <div class="settlement-list">
+      {% for item in settled %}
+        <div>
+          {{item.place}}. {{item.name}} <strong>{% if item.receives %}modtager {% endif %}{{item.placement_amount}} kr</strong>
+        </div>
+      {% endfor %}
+    </div>
+    <p>
+      <strong>Til klubkassen i alt: {{club_total}} kr</strong>
+    </p>
+  {% endif %}
+</section>
+<div class="night-actions">
+  <a class="button secondary" href="/sessions/{{session.id}}/export.xlsx">Eksportér Excel</a>
+  <a class="button secondary" href="/sessions/{{session.id}}/history">Ændringshistorik</a>
+  {% if not session.ended_at %}
+    <form method="post" action="/sessions/{{session.id}}/end" onsubmit="return confirm('Afslut spilaftenen? Den bliver låst for ændringer.')">
+      {% if session.is_club %}
+        <label><input type="checkbox" name="collect_club_money" value="true" checked> Medregn betaling til klubkassen</label>
+      {% else %}
+        <p class="muted">Gæster deltager: aftenen tæller ikke i klubstatistik eller klubkasse.</p>
+      {% endif %}
+      <button type="submit">Afslut spilaften</button>
+    </form>
+  {% else %}
+    <strong>✓ Afsluttet {{session.ended_at}}</strong>
+    <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen til rettelse? Tidligere pladsbetaling annulleres og beregnes igen, når du afslutter.')">
+      <button type="submit" class="secondary">Genåbn til rettelse</button>
+    </form>
+  {% endif %}
+</div>

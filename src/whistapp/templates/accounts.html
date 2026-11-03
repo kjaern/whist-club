@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block content %}<h1>Serveradministration</h1><p><strong>Konti</strong> · <a href="/admin/ai">AI-fotoimport</a></p><p>Nulstil adgangskoder for eksisterende konti. Nye logins oprettes under Klubadministration → Medlemmer.</p><section class="card"><h2>Eksisterende konti</h2>
+{% for a in accounts %}<div class="fee-inline"><strong>{{a.username}}</strong> {{a.member_name or 'Ikke tilknyttet medlem' }}
+{% if a.must_change_password %}· Afventer adgangskodeskift{% endif %}
+<form method="post" action="/admin/accounts/{{a.id}}/reset"><button type="submit" class="secondary">Nulstil adgangskode</button></form></div>
+{% else %}<p>Ingen konti endnu.</p>{% endfor %}</section>
+{% endblock %}

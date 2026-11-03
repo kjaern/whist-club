@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Klubadministration</h1>
+  <p><a href="/">← Spilaftener</a></p>
+  {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+  {% if saved %}<p role="status">Ændringerne er gemt.</p>{% endif %}
+
+  <form method="post" action="/club/save">
+    <section class="card">
+      <h2>Klub</h2>
+      <label>Klubnavn
+        <input name="club_name" value="{{ club_name }}" required maxlength="80">
+      </label>
+      <p class="muted">Navnet vises i klubvælgeren og øverst på siden. To klubber kan ikke have samme navn.</p>
+    </section>
+
+    <section class="card">
+      <h2>Medlemmer</h2>
+      <p class="muted">Medlems-ID ændres aldrig. Inaktive medlemmer bevares i historikken og kan aktiveres igen.</p>
+      {% for member in members %}
+        <div class="fee-inline">
+          <span>#{{ member.id }}</span>
+          <label>Navn
+            <input name="name_{{ member.id }}" value="{{ form_values.get('name_' ~ member.id, member.name) }}" required maxlength="80">
+          </label>
+          <label style="flex:1 1 220px">Aliasnavne
+            <input name="aliases_{{ member.id }}" value="{{ alias_form_values.get('aliases_' ~ member.id, member_aliases.get(member.id, '')) }}" maxlength="2600" placeholder="Fx Jens Fup, Sjant">
+          </label>
+          <label>Status
+            {% set status = form_values.get('status_' ~ member.id, 'active' if member.status == 'active' else 'paused') %}
+            <select name="status_{{ member.id }}">
+              <option value="active" {% if status == 'active' %}selected{% endif %}>Aktiv</option>
+              <option value="paused" {% if status == 'paused' %}selected{% endif %}>Inaktiv</option>
+            </select>
+          </label>
+          <span>{{ 'Klubadministrator' if member.is_club_admin else 'Medlem' }}</span>
+          <button type="submit" form="role-{{ member.id }}" class="secondary">{{ 'Fjern klubadmin' if member.is_club_admin else 'Gør til klubadmin' }}</button>
+          {% if member_logins.get(member.id) %}
+            {% set login = member_logins[member.id] %}
+            <span>Login: {{ login.username }} · {{ 'Afventer første login' if login.must_change_password else 'Aktiv' }}</span>
+            {% if login.must_change_password %}
+              <button type="submit" form="reset-invitation-{{ member.id }}" class="secondary">Nulstil invitation</button>
+            {% endif %}
+          {% else %}
+            <span>Ingen konto</span>
+            <label>Brugernavn
+              <input name="username" form="create-login-{{ member.id }}" required minlength="3" maxlength="64" autocomplete="off">
+            </label>
+            <button type="submit" form="create-login-{{ member.id }}" class="secondary">Opret login</button>
+            {% if unlinked_accounts %}
+              <label>Eksisterende konto
+                <select name="account_id" form="link-login-{{ member.id }}" required>
+                  {% for account in unlinked_accounts %}<option value="{{ account.id }}">{{ account.username }}</option>{% endfor %}
+                </select>
+              </label>
+              <button type="submit" form="link-login-{{ member.id }}" class="secondary">Tilknyt konto</button>
+            {% endif %}
+          {% endif %}
+        </div>
+      {% endfor %}
+      <p class="muted">Et medlem kan spille uden login. Login kan oprettes senere uden at ændre medlem eller resultater.</p>
+      <h3>Tilføj medlem</h3>
+      <div id="new-members">
+        {% for name in new_members %}
+          <label>Nyt medlem {{ loop.index }}
+            <input name="new_member" value="{{ name }}" maxlength="80" placeholder="Navn" required>
+          </label>
+        {% endfor %}
+      </div>
+      <button type="button" class="secondary" hx-post="/club/new-member"
+              hx-include="closest form" hx-target="#new-members" hx-swap="beforeend"
+              formnovalidate>+ Tilføj medlem</button>
+    </section>
+
+    <section class="card">
+      <h2>Klubkasse</h2>
+      <p class="muted">Ændringer gælder for nye spilaftener; påbegyndte og afsluttede aftener beholder deres regler.</p>
+      <label>Betalingsform
+        <select name="money_mode" id="money-mode">
+          {% for mode, label in money_modes.items() %}
+            <option value="{{ mode }}" {% if mode == money_mode %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      {# Only the fields for the chosen mode are shown; hidden fields keep their saved values. #}
+      <div class="money-placement" {% if money_mode != 'placement' %}hidden{% endif %}>
+        <p class="muted">Hvert aktivt medlem betaler efter placering, også fraværende.</p>
+        <p>Aktive medlemmer efter ændringer: <strong>{{ active_count }}</strong></p>
+        <label>Pladsbetalinger (kr., bedste til dårligste)
+          <input name="placements" value="{{ form_values.get('placements', rates) }}" {% if money_mode == 'placement' %}required{% endif %}>
+        </label>
+      </div>
+      <div class="money-score" {% if money_mode == 'placement' %}hidden{% endif %}>
+        <p class="muted">Kun de medlemmer, der spillede, afregnes efter deres slutscore gange kr. pr. point.</p>
+        <label>Kr. pr. point
+          <input name="point_rate" value="{{ point_rate }}" inputmode="decimal" {% if money_mode != 'placement' %}required{% endif %}>
+        </label>
+      </div>
+      <script>
+      (() => {
+        const mode = document.getElementById('money-mode');
+        const update = () => {
+          const placement = mode.value === 'placement';
+          for (const [selector, shown] of [['.money-placement', placement], ['.money-score', !placement]]) {
+            const block = document.querySelector(selector);
+            block.hidden = !shown;
+            block.querySelectorAll('input').forEach(input => { input.required = shown; });
+          }
+        };
+        mode.addEventListener('change', update);
+      })();
+      </script>
+      <label>Fejl40 (kr.)
+        <input name="fejl40" type="number" min="0" value="{{ form_values.get('fejl40', settings.fejl40) }}" required>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Meldinger</h2>
+      <p class="muted">Vælg hvilke meldinger klubben spiller, og deres værdier. Beregningen er den samme kode, som vises under “Vis regler”. Ændringer gælder for nye spilaftener.</p>
+      <input type="hidden" name="bid_settings_form" value="1">
+      <div class="bid-settings">
+      {% for bid in bid_rows %}
+        <div class="bid-setting">
+          <label class="bid-toggle"><input type="checkbox" name="bid_enabled_{{ bid.key }}" value="1" {% if bid.enabled %}checked{% endif %}> {{ bid.label }}</label>
+          {% for option in bid.options %}
+            <label>{{ option.label }}
+              <input name="{{ option.field }}" value="{{ option.value }}" inputmode="decimal" required>
+            </label>
+          {% endfor %}
+        </div>
+      {% endfor %}
+      </div>
+      <p class="muted">Almindelige, Halve, Sans og Gode: pris = (meldte stik − 6) / 2 × grundpris. VIP: pris = (meldte stik − 6) / 2 + tillæg. Sol, Ren sol, Bordlægger og Paskrig: fast værdi.</p>
+    </section>
+    <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+      <button type="submit">Gem alle ændringer</button>
+    </div>
+  </form>
+
+  {% for member in members %}
+    <form id="role-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/role">
+      <input type="hidden" name="is_club_admin" value="{{ 0 if member.is_club_admin else 1 }}">
+    </form>
+  {% endfor %}
+  {# Standalone forms: never nest forms inside the main member-edit form. #}
+  {% for member in members %}
+    {% if member_logins.get(member.id) %}
+      {% if member_logins[member.id].must_change_password %}
+        <form id="reset-invitation-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/invitation/reset"></form>
+      {% endif %}
+    {% else %}
+      <form id="create-login-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/login"></form>
+      {% if unlinked_accounts %}
+        <form id="link-login-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/link"></form>
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+
+  {% if server_admin %}
+  <section class="card">
+    <h2>AI-fotoimport</h2>
+    <p>AI-import er {{ 'slået til' if settings.allow_ai_import else 'slået fra' }} for klubben. AI-udbyder, grænser og klubbens AI-noter styres under <a href="/admin/ai">Serveradministration → AI-fotoimport</a>.</p>
+  </section>
+  {% endif %}
+{% endblock %}

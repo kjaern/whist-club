@@ -1,0 +1,12 @@
+{% extends "base.html" %}{% block content %}
+<h1>Spilaftener</h1>
+<p>Velkommen, {{ member.name if member else account.username }}.</p>
+{% if member %}
+<p><a href="/statistics">Klubstatistik</a>{% if member.is_club_admin %} · <a href="/club">Klubadministration</a>{% endif %}</p>
+<section class="card"><h2>Spilaftener</h2>
+{% for s in sessions %}<p><a href="/sessions/{{ s.id }}/live">{{ s.title }}</a> · {{ s.created_at }} · {{ 'Afsluttet' if s.ended_at else 'I gang' }}</p>
+{% else %}<p>Ingen spilaftener endnu.</p>{% endfor %}
+</section>
+{% else %}<p>Din konto er aktiveret, men ikke knyttet til et aktivt klubmedlem. Kontakt klubadministratoren.</p>{% endif %}
+<p><a href="/account">Skift adgangskode</a></p>
+{% endblock %}

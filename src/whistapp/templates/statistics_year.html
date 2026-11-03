@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>
+    Klubstatistik · {{ year }}
+  </h1>
+  <p>
+    <a href="/statistics?origin={{ origin }}">← Tilbage til årsstatistik</a>
+  </p>
+  {% for detail in details %}
+    <section class="card">
+      <div class="stats-section-heading">
+        <h2>
+          {{ detail.night.created_at[:10] }} · {{ detail.night.title }}
+        </h2>
+        <a href="/sessions/{{ detail.night.id }}">Se spilaften ↗</a>
+      </div>
+      <p>
+        {{ detail.night.hand_count }} hænder
+      </p>
+      <div style="overflow-x:auto">
+        <table class="night">
+          <thead>
+            <tr>
+              {% include 'partials/statistics_headers.html' %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in detail.players %}
+              <tr>
+                {% include 'partials/statistics_cells.html' %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  {% else %}
+    <p>
+      Ingen klubspilaftener med registrerede hænder i {{ year }}.
+    </p>
+  {% endfor %}
+{% endblock %}

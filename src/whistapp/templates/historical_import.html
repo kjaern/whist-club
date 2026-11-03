@@ -1,0 +1,813 @@
+{% extends 'base.html' %}
+{% macro sheet_table(sheet) %}
+{% if sheet.rows %}<div class="source-workbook"><table>
+{% for row in sheet.rows %}{% set row_flags = sheet.flags[loop.index0] if sheet.flags is defined and loop.index0 < sheet.flags|length else [] %}
+{% if loop.first %}<thead><tr>{% for cell in row %}<th class="{{row_flags[loop.index0] if loop.index0 < row_flags|length else ''}}">{{cell}}</th>{% endfor %}</tr></thead><tbody>
+{% else %}<tr>{% for cell in row %}<td class="{{row_flags[loop.index0] if loop.index0 < row_flags|length else ''}}">{{cell}}</td>{% endfor %}</tr>{% endif %}
+{% endfor %}
+</tbody></table></div>{% endif %}
+{% endmacro %}
+{% macro workbook_viewer(workbooks) %}
+{% if workbooks %}
+<dialog id="source-excel-dialog" class="source-excel-dialog"><button type="button" id="close-source-excel" class="source-excel-close">Luk ×</button><h2>Excel-ark</h2>
+<style>
+.source-excel-dialog { width:min(96vw,1100px); max-height:90vh; border:1px solid #888; border-radius:.6rem; padding:1rem; }
+.source-excel-dialog::backdrop { background:rgba(0,0,0,.6); }
+.source-excel-close { float:right; }
+</style>
+{% for workbook in workbooks %}
+<details {% if loop.first %}open{% endif %}><summary>{{workbook.title}}</summary>
+{% for sheet in workbook.sheets %}
+<details open><summary>Fane: {{sheet.name}}</summary>
+{{ sheet_table(sheet) }}
+{% if sheet.truncated %}<p class="muted">Forhåndsvisningen er begrænset; download Excel-filen for resten.</p>{% endif %}
+</details>
+{% endfor %}
+</details>
+{% endfor %}
+</dialog>
+{% endif %}
+{% endmacro %}
+{% block content %}
+<h1>Importer spilaften</h1>
+{% if ai_allowed %}<p><a href="/import/current">Aktuelle importer →</a></p>{% endif %}
+<p>Upload en Excel-fil eller ZIP med Excel og fotos, eller lad AI transskribere fotos af scoreark. Excel skal have <strong>én fane</strong> og én række pr. hånd. Gennemse og ret meldinger, før du gemmer. Importen gemmes først ved bekræftelse.</p>
+{% for error in errors %}<p style="color:#c33">{{error}}</p>{% endfor %}
+<style>
+.import-tabs { display:flex; gap:.35rem; margin:1rem 0; }
+.import-tabs button[aria-selected="true"] { font-weight:700; border-bottom:3px solid currentColor; }
+.import-tab-panel[hidden] { display:none; }
+.import-remarks { white-space:pre-wrap; max-height:20rem; overflow:auto; background:#f6f6f6; padding:.75rem; border-radius:.4rem; }
+.source-workbook { overflow:auto; max-height:32rem; margin:.5rem 0 1rem; }
+.source-workbook table { border-collapse:collapse; width:max-content; min-width:100%; }
+.source-workbook td,.source-workbook th { border:1px solid #ccd4d8; padding:.3rem .45rem; white-space:pre-wrap; }
+.source-workbook .uncertain { background:#ffe39b; }
+.source-workbook .source-warning { outline:2px solid #c47700; }
+</style>
+{% if not data %}
+<div class="import-tabs" role="tablist" aria-label="Importmetode">
+<button type="button" role="tab" data-tab="excel" aria-selected="{{'true' if active_tab != 'ai' else 'false'}}">Excel eller ZIP</button>
+{% if ai_allowed %}<button type="button" role="tab" data-tab="ai" aria-selected="{{'true' if active_tab == 'ai' else 'false'}}">AI-fotoimport</button>{% endif %}
+</div>
+<section class="import-tab-panel" data-panel="excel" {% if active_tab == 'ai' %}hidden{% endif %}>
+<div class="card">
+<form action="/import/preview" method="post" enctype="multipart/form-data">
+  <label>Excel eller ZIP<input type="file" name="workbook" accept=".xlsx,.zip" required></label>
+  <button type="submit">Gennemse import</button>
+</form>
+</div>
+<div class="card">
+<h2>Importér JSON (uden AI)</h2>
+<form action="/import/json/preview" method="post" enctype="multipart/form-data">
+<label>Transskription (.json)<input type="file" name="transcription_json" accept=".json,application/json" required></label>
+<button type="submit">Gennemgå JSON</button>
+</form>
+</div>
+<div class="card">
+<h2>Kun slutresultater</h2>
+<p>Hvis hånddata ikke kan rekonstrueres, gemmes kun slutresultaterne. Der oprettes ingen opdigtede hænder eller meldinger.</p>
+<form action="/import/final" method="post">
+<label>Spilaftenens navn (valgfrit)<input name="title"></label>
+<label>Præcision<select name="date_precision"><option value="minute">Minut</option><option value="day" selected>Dag</option><option value="month">Måned</option><option value="year">År</option><option value="unknown">Ukendt</option></select></label>
+<label>Dato / tidspunkt<input name="game_date" placeholder="2026-07-17 / 2026-07 / 2026"></label>
+{% for i in range(4) %}
+<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+<label>Spiller {{i+1}}<input name="name_{{i}}" required></label>
+<label>Resultat (kr)<input name="score_{{i}}" required></label>
+<label>Klubmedlem<select name="member_{{i}}"><option value="">Gæst / ukendt</option>
+{% for member in members %}<option value="{{member.id}}">{{member.name}}</option>{% endfor %}
+</select></label></div>
+{% endfor %}
+<label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
+<button type="submit">Gem slutresultater</button>
+</form>
+</div>
+</section>
+{% if ai_allowed %}<section class="import-tab-panel" data-panel="ai" {% if active_tab != 'ai' %}hidden{% endif %}>
+<div class="card">
+<h2>AI-fotoimport</h2>
+<p>Upload fotos af scorearkene. AI transskriberer dem til en Excel-fil, som derefter gennemgås og valideres som en almindelig import. Fotos vedhæftes spilaftenen, hvis importen gemmes.</p>
+<form action="/import/ai" method="post" enctype="multipart/form-data">
+<label>Fotos af scoreark<input id="ai-photo-input" type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+<button type="button" id="ai-add-photos" class="secondary">+ Tilføj flere fotos</button>
+<span id="ai-photo-count" class="muted" aria-live="polite"></span>
+<script>
+(() => {
+  const input = document.getElementById('ai-photo-input');
+  const add = document.getElementById('ai-add-photos');
+  const count = document.getElementById('ai-photo-count');
+  const chooser = document.createElement('input');
+  chooser.type = 'file'; chooser.accept = input.accept; chooser.multiple = true;
+  function update() { count.textContent = input.files.length + ' foto valgt'; }
+  add.addEventListener('click', () => chooser.click());
+  chooser.addEventListener('change', () => {
+    const transfer = new DataTransfer();
+    const seen = new Set();
+    for (const file of [...input.files, ...chooser.files]) {
+      const key = [file.name, file.size, file.lastModified].join(':');
+      if (!seen.has(key)) { seen.add(key); transfer.items.add(file); }
+    }
+    input.files = transfer.files;
+    chooser.value = '';
+    update();
+  });
+  input.addEventListener('change', update);
+  update();
+})();
+</script>
+<button type="submit">Transskribér med AI</button>
+</form>
+<p class="muted">AI-import skal konfigureres i <code>config/config.ini</code> under <code>[llm]</code>. API-nøglen lægges i <code>config/secrets.ini</code> eller miljøvariablen <code>WHIST_LLM_API_KEY</code>.</p>
+</div>
+{% if pending_photos and staged_photo_names %}
+<div class="card"><h2>Fotos bevaret fra forsøget</h2>
+<p>Fotos er gemt midlertidigt, så du kan kontrollere dem eller prøve transskriptionen igen.</p>
+<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+{% for photo in staged_photo_names %}<a href="/import/staged/{{pending_photos}}/{{photo}}" target="_blank"><img src="/import/staged/{{pending_photos}}/{{photo}}" alt="Originalt scoreark" style="max-height:170px;max-width:120px;object-fit:contain"></a>{% endfor %}
+</div>
+<form action="/import/ai" method="post"><input type="hidden" name="pending_photos" value="{{pending_photos}}"><button type="submit">Prøv igen med de bevarede fotos</button></form>
+</div>
+{% endif %}
+{% if ai_artifacts %}
+<div class="card">
+<h2>AI-bemærkninger og transskription</h2>
+<p>Filerne er bevaret, selv om importen ikke kunne gennemføres.</p>
+{% for file in ai_artifacts.files %}<p><a href="/import/ai/staged/{{ai_artifacts.token}}/{{file.name}}">{{file.label}}</a></p>{% endfor %}
+{% if ai_artifacts.remarks %}<details><summary>Bemærkninger fra AI</summary><pre class="import-remarks" style="background:#172a34;color:#e8eff3;white-space:pre-wrap;padding:.7rem;border-radius:.3rem">{{ai_artifacts.remarks}}</pre></details>{% endif %}
+{% if ai_artifacts.remarks_truncated %}<p class="muted">Bemærkningerne er forkortet her; download filen for hele teksten.</p>{% endif %}
+</div>
+{% endif %}
+</section>
+{% endif %}
+<script>
+(() => {
+  const buttons = [...document.querySelectorAll('.import-tabs [data-tab]')];
+  const panels = [...document.querySelectorAll('.import-tab-panel')];
+  function select(tab) {
+    for (const button of buttons) button.setAttribute('aria-selected', String(button.dataset.tab === tab));
+    for (const panel of panels) panel.hidden = panel.dataset.panel !== tab;
+  }
+  for (const button of buttons) button.addEventListener('click', () => select(button.dataset.tab));
+})();
+</script>
+{% if source_files %}<section class="card"><h2>Oprindelige filer</h2>
+{% for file in source_files %}<p><a href="{{file.url}}" download>{{file.original_name}}</a> · {{file.kind}}{% if file.original_name|lower|replace(".xlsx", "") != file.original_name|lower %} · <button type="button" class="open-source-excel">Vis Excel</button>{% endif %}</p>
+{% for markdown in file.zip_texts or [] %}<details><summary>{{markdown.name}}</summary><pre class="import-remarks">{{markdown.text}}</pre></details>{% endfor %}{% endfor %}
+</section>{% endif %}
+{{ workbook_viewer(source_workbooks) }}
+{% if source_workbooks %}<script>document.querySelectorAll(".open-source-excel").forEach(button => button.addEventListener("click", () => document.getElementById("source-excel-dialog").showModal())); document.getElementById("close-source-excel").addEventListener("click", () => document.getElementById("source-excel-dialog").close());</script>{% endif %}
+{% else %}
+<form action="/import/commit" method="post">
+<input type="hidden" name="data" value="{{data|tojson|forceescape}}">
+{% if ai_artifacts or data.pending_photos or source_files or source_workbooks %}
+<section class="card">
+<h2>Kildemateriale</h2>
+<p class="muted">Åbn filerne direkte herunder.</p>
+{% for photo in staged_photo_names %}{% if photo|lower|replace(".jpg", "") != photo|lower or photo|lower|replace(".jpeg", "") != photo|lower or photo|lower|replace(".png", "") != photo|lower or photo|lower|replace(".webp", "") != photo|lower %}
+<details><summary>Originalark: {{photo}}</summary>
+<a href="/import/staged/{{data.pending_photos}}/{{photo}}" target="_blank"><img src="/import/staged/{{data.pending_photos}}/{{photo}}" alt="{{photo}}" style="max-width:100%;height:auto"></a>
+</details>
+{% endif %}{% endfor %}
+{% if ai_artifacts %}
+{% for file in ai_artifacts.files %}<p><a href="/import/ai/staged/{{ai_artifacts.token}}/{{file.name}}" download="{{file.name}}">{{file.label}}</a></p>{% endfor %}
+{% if ai_artifacts.zip_entries %}<details><summary>Filer i ZIP-arkivet</summary><ul>{% for entry in ai_artifacts.zip_entries %}<li>{{entry.name}} ({{entry.size}} bytes)</li>{% endfor %}</ul></details>{% endif %}
+<details><summary>AI-transskription (JSON)</summary>
+<pre id="import-ai-json" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:65vh;overflow:auto">Indlæser JSON…</pre>
+</details>
+{% if ai_artifacts.remarks %}<details><summary>Bemærkninger fra AI</summary><pre class="import-remarks" style="background:#172a34;color:#e8eff3;white-space:pre-wrap;padding:.7rem;border-radius:.3rem">{{ai_artifacts.remarks}}</pre></details>{% endif %}
+{% endif %}
+{% for file in source_files %}
+<details><summary>{{file.original_name}}</summary>
+<p><a href="{{file.url}}" download>Download {{file.original_name}}</a></p>
+{% if file.text is defined %}<pre class="import-remarks">{{file.text}}</pre>
+{% elif file.json_text is defined %}<pre style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:65vh;overflow:auto">{{file.json_text}}</pre>
+{% elif file.media_type.startswith('image/') %}<img src="{{file.url}}" alt="{{file.original_name}}" style="max-width:100%;height:auto">
+{% elif file.sheets is defined %}{% for sheet in file.sheets %}<h3>{{sheet.name}}</h3><div class="source-workbook"><table>{% for row in sheet.rows %}<tr>{% for cell in row %}<td>{{cell}}</td>{% endfor %}</tr>{% endfor %}</table></div>{% endfor %}
+{% else %}<p class="muted">Ingen forhåndsvisning.</p>{% endif %}
+</details>
+{% endfor %}
+{% for book in source_workbooks %}
+<details><summary>{{book.title}}</summary>
+{% for sheet in book.sheets %}<h3>{{sheet.name}}</h3>{{ sheet_table(sheet) }}{% endfor %}
+</details>
+{% endfor %}
+</section>
+{% if ai_artifacts %}<script>
+fetch('/import/ai/staged/{{ai_artifacts.token}}/transcription.json')
+.then(response => { if (!response.ok) throw new Error('HTTP ' + response.status); return response.json(); })
+.then(data => { document.getElementById('import-ai-json').textContent = JSON.stringify(data, null, 2); })
+.catch(error => { document.getElementById('import-ai-json').textContent = 'JSON kunne ikke indlæses: ' + error.message; });
+</script>{% endif %}
+{% endif %}
+<dialog id="import-row-json-dialog" style="width:min(90vw,750px);max-height:85vh"><button type="button" onclick="this.closest('dialog').close()">Luk ×</button><h3>Rå JSON for hånd</h3><pre id="import-row-json-content" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></dialog>
+<dialog id="import-bid-photo-dialog" style="width:min(96vw,1100px);max-height:95vh"><button type="button" onclick="this.closest('dialog').close()">Luk ×</button><h3>Hånd og spillernavne på originalark</h3><button type="button" id="import-photo-toggle-boxes" class="secondary" aria-pressed="false">Vis markeringer</button><p id="import-bid-photo-error" class="muted" hidden></p><div style="display:grid;gap:12px;justify-items:center"><canvas id="import-photo-names" aria-label="Spillernavne" style="max-width:100%;max-height:25vh"></canvas><canvas id="import-bid-photo-crop" aria-label="Hele hånden og melding" style="max-width:100%;max-height:55vh"></canvas></div></dialog>
+<script>
+(function () {
+  const jsonDialog = document.getElementById('import-row-json-dialog');
+  const photoDialog = document.getElementById('import-bid-photo-dialog');
+  const toggleBoxes = document.getElementById('import-photo-toggle-boxes');
+  let drawOverlays = false;
+  let redrawPhoto = null;
+  toggleBoxes.addEventListener('click', () => {
+    drawOverlays = !drawOverlays;
+    toggleBoxes.textContent = drawOverlays ? 'Skjul markeringer' : 'Vis markeringer';
+    toggleBoxes.setAttribute('aria-pressed', String(drawOverlays));
+    if (redrawPhoto) redrawPhoto();
+  });
+  const photoNames = {{staged_photo_names|tojson}}.filter(name => /^\d{2}\.(jpe?g|png|webp)$/i.test(name));
+  const photoToken = {{(data.pending_photos or '')|tojson}};
+  for (const dialog of [jsonDialog, photoDialog]) {
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog) dialog.close();
+    });
+  }
+  document.addEventListener('click', event => {
+    const jsonButton = event.target.closest('.show-row-json');
+    if (jsonButton) {
+      document.getElementById('import-row-json-content').textContent = JSON.stringify(JSON.parse(jsonButton.dataset.json), null, 2);
+      jsonDialog.showModal();
+      return;
+    }
+    const eye = event.target.closest('.show-bid-photo');
+    if (!eye) return;
+    const box = JSON.parse(eye.dataset.box);
+    const nameBoxes = JSON.parse(eye.dataset.names || 'null');
+    const bidBox = JSON.parse(eye.dataset.bid || 'null');
+    const bidQuad = JSON.parse(eye.dataset.quad || 'null');
+    const valueBoxes = JSON.parse(eye.dataset.valueBoxes || 'null');
+    const sheetBox = JSON.parse(eye.dataset.sheet || 'null');
+    const rotation = Number(eye.dataset.rotation || 0);
+    const photoId = eye.dataset.photo;
+    let photoIndex = /^\d+$/.test(photoId) ? Number(photoId) - 1 : photoNames.findIndex(name => name === photoId || name.startsWith(photoId + '-'));
+    if (!photoId && photoNames.length) photoIndex = 0; // Missing photo_id: use first uploaded photo.
+    if (photoIndex < 0 || !photoNames[photoIndex]) return;
+    const validBox = b => Array.isArray(b) && b.length === 4 && b.every(v => typeof v === 'number' && v >= 0 && v <= 1000) && b[2] > b[0] && b[3] > b[1];
+    const error = document.getElementById('import-bid-photo-error');
+    const canvas = document.getElementById('import-bid-photo-crop');
+    const source = new Image();
+    error.hidden = true;
+    canvas.hidden = true;
+    document.getElementById('import-photo-names').hidden = true;
+    source.onload = () => {
+      // Render independent strips: the names and the selected hand, never the intervening rows.
+      const validQuad = q => Array.isArray(q) && q.length === 4 && q.every(p => Array.isArray(p) && p.length === 2 && p.every(v => typeof v === 'number' && v >= 0 && v <= 1000));
+      const row = validBox(box) ? box : (validBox(sheetBox) ? sheetBox : [0, 0, 1000, 1000]);
+      const headings = Array.isArray(nameBoxes) ? nameBoxes.filter(validBox) : [];
+      const namesCanvas = document.getElementById('import-photo-names');
+      const turn = [90, 180, 270].includes(rotation) ? rotation : 0;
+      function renderStrip(target, region, padX, padY, highlight) {
+        const leftN = Math.max(0, region[0] - padX), topN = Math.max(0, region[1] - padY);
+        const rightN = Math.min(1000, region[2] + padX), bottomN = Math.min(1000, region[3] + padY);
+        const left = leftN * source.naturalWidth / 1000, top = topN * source.naturalHeight / 1000;
+        const width = (rightN - leftN) * source.naturalWidth / 1000;
+        const height = (bottomN - topN) * source.naturalHeight / 1000;
+        const sideways = turn === 90 || turn === 270;
+        target.width = Math.max(1, Math.ceil(sideways ? height : width));
+        target.height = Math.max(1, Math.ceil(sideways ? width : height));
+        const ctx = target.getContext('2d');
+        ctx.save();
+        ctx.translate(target.width / 2, target.height / 2);
+        ctx.rotate(turn * Math.PI / 180);
+        ctx.drawImage(source, left, top, width, height, -width / 2, -height / 2, width, height);
+        if (highlight && drawOverlays) {
+          const points = validQuad(bidQuad) ? bidQuad : validBox(bidBox) ?
+            [[bidBox[0],bidBox[1]],[bidBox[2],bidBox[1]],[bidBox[2],bidBox[3]],[bidBox[0],bidBox[3]]] : null;
+          const outlines = [points];
+          if (Array.isArray(valueBoxes)) {
+            for (const pair of valueBoxes) {
+              if (!Array.isArray(pair)) continue;
+              for (const b of pair) {
+                if (validQuad(b)) outlines.push(b);
+                else if (validBox(b)) outlines.push([[b[0],b[1]],[b[2],b[1]],[b[2],b[3]],[b[0],b[3]]]);
+              }
+            }
+          }
+          for (const points of outlines.filter(Boolean)) {
+            ctx.beginPath();
+            points.forEach((p,i) => {
+              const x = p[0] * source.naturalWidth / 1000 - left - width / 2;
+              const y = p[1] * source.naturalHeight / 1000 - top - height / 2;
+              if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+            });
+            ctx.closePath();
+            ctx.strokeStyle = '#ffca28';
+            ctx.lineWidth = Math.max(2, width / 250);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+        target.hidden = false;
+      }
+      redrawPhoto = () => {
+      if (headings.length) {
+        const namesRegion = [Math.min(...headings.map(b=>b[0])), Math.min(...headings.map(b=>b[1])),
+          Math.max(...headings.map(b=>b[2])), Math.max(...headings.map(b=>b[3]))];
+        renderStrip(namesCanvas, namesRegion, 16, 12, false);
+      } else {
+        namesCanvas.hidden = true;
+      }
+      renderStrip(canvas, row, 18, 18, true);
+      };
+      redrawPhoto();
+    };
+    source.onerror = () => {
+      error.textContent = 'Originalfoto kunne ikke indlæses.';
+      error.hidden = false;
+    };
+    source.src = '/import/staged/' + encodeURIComponent(photoToken) + '/' + encodeURIComponent(photoNames[photoIndex]);
+    photoDialog.showModal();
+  });
+})();
+</script>
+<section class="card">
+<h2>Spilaften og spillere</h2>
+<label>Navn<input name="title" value="{{title}}"></label>
+<label>Præcision<select name="date_precision">{% for key,label in [('minute','Minut'),('day','Dag'),('month','Måned'),('year','År'),('unknown','Ukendt')] %}<option value="{{key}}" {% if date_precision==key %}selected{% endif %}>{{label}}</option>{% endfor %}</select></label>
+<label>Dato / tidspunkt <span class="muted">(valgfrit)</span>
+<input type="date" id="historical-day" value="{{game_date if date_precision=='day' else ''}}" {% if date_precision!='day' %}hidden{% endif %}>
+<input type="datetime-local" id="historical-minute" value="{{game_date|replace(' ','T') if date_precision=='minute' else ''}}" {% if date_precision!='minute' %}hidden{% endif %}>
+<input type="month" id="historical-month" value="{{game_date if date_precision=='month' else ''}}" {% if date_precision!='month' %}hidden{% endif %}>
+<input type="number" id="historical-year" min="1" max="9999" placeholder="ÅÅÅÅ" value="{{game_date if date_precision=='year' else ''}}" {% if date_precision!='year' %}hidden{% endif %}>
+<input type="hidden" name="game_date" id="historical-date-value" value="{{game_date}}">
+</label>
+<script>
+(function () {
+  const precision = document.querySelector('select[name="date_precision"]');
+  const output = document.getElementById('historical-date-value');
+  const fields = {day: document.getElementById('historical-day'), minute: document.getElementById('historical-minute'), month: document.getElementById('historical-month'), year: document.getElementById('historical-year')};
+  function update() {
+    for (const [kind, field] of Object.entries(fields)) field.hidden = kind !== precision.value;
+    const active = fields[precision.value];
+    output.value = active ? active.value.replace('T',' ') : '';
+  }
+  precision.addEventListener('change', update);
+  for (const field of Object.values(fields)) field.addEventListener('input', update);
+  update();
+})();
+</script>
+<p class="muted">Navne matches automatisk mod klubmedlemmer og tidligere godkendte aliaser. Ret kun ukendte eller forkerte matches. Nye valgte navne gemmes som aliaser.</p>
+<div class="import-player-corrections" style="display:flex;gap:.6rem;flex-wrap:wrap">
+{% for name in data.players %}{% set player_index=loop.index0 %}
+<div class="card" style="min-width:14rem;flex:1">
+<label>Spillernavn
+<input class="import-player-name" name="player_name_{{player_index}}" value="{{name}}" maxlength="80" required>
+</label>
+<label>Klubmedlem<select name="member_{{player_index}}">
+<option value="">Gæst / ikke tilknyttet</option>
+{% for member in members %}<option value="{{member.id}}" {% if mapping.get(name)==member.id %}selected{% endif %}>{{member.name}}</option>{% endfor %}
+</select></label></div>
+{% endfor %}
+</div>
+<label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
+<label>Ret en tidligere import (valgfrit)<select name="replace_id">
+<option value="">Opret ny spilaften</option>
+{% for s in previous %}<option value="{{s.id}}" {% if replace_id|string==s.id|string %}selected{% endif %}>Erstat: {{s.title}} (#{{s.id}})</option>{% endfor %}
+</select></label>
+</section>
+<section class="card">
+<h2>Hænder — {{data.hands|length}}</h2>
+<p id="import-review-summary" role="status">{{data.hands|length}} hænder · AI-usikkerheder: beregner…</p>
+<p>Grøn hånd = score og melding valideres. Rød hånd = manglende eller ugyldig værdi, scoreuoverensstemmelse eller melding kan ikke valideres. Gule celler markerer usikker aflæsning eller kildeadvarsel; en gul celle kan godt stå i en grøn hånd.</p>
+{% if data.source_warnings %}<details><summary>Kildeadvarsler ({{data.source_warnings|length}})</summary><ul>{% for warning in data.source_warnings %}<li>{{warning.message}}</li>{% endfor %}</ul></details>{% endif %}
+<div style="overflow-x:auto"><table class="night" style="width:max-content;min-width:100%">
+<thead><tr><th>#</th><th>Melder</th><th>Melding</th><th>Meldt</th><th>Stik</th><th>Makker</th>
+{% for name in data.players %}<th data-player-column="{{loop.index0}}">{{name}} Δ</th>{% endfor %}<th>Handlinger</th><th>Gå med (SOL m.fl.)</th></tr></thead>
+<tbody id="import-hands-body">{% for hand in data.hands %}{% set i=loop.index0 %}<tr class="import-hand" data-hand="{{i}}" data-source-id="{{hand.source_id}}" data-actual-explicit="{{'true' if hand.actual_explicit else 'false'}}" data-partner-explicit="{{'true' if hand.partner_explicit else 'false'}}" data-field-issues='{{hand_field_issues[i]|tojson|forceescape}}'>
+<td><div class="import-hand-tools"><button type="button" class="import-status" data-state="{{'ok' if hand_valid[i] else 'error'}}" title="{{issues[i]|join('; ') if issues[i] else 'Hånden er valideret'}}" aria-label="Kontrol af hånd {{hand.number}}">{{hand.number}}</button>
+{% if hand.source_notes %}<details><summary>Kildenote</summary><small>{{hand.source_notes|join('; ')}}</small></details>{% endif %}
+{% if hand.source_json is defined %}<button type="button" class="show-row-json secondary" style="padding:3px 6px" data-json='{{hand.source_json|tojson|forceescape}}' aria-label="Vis JSON for hånd {{hand.number}}">JSON</button>{% endif %}
+{% if staged_photo_names and hand.source_json is defined %}<button type="button" class="show-bid-photo secondary" style="padding:3px 6px" data-box='{{(hand.row_box or hand.bid_box)|tojson|forceescape}}' data-names='{{hand.get("player_boxes")|tojson|forceescape}}' data-bid='{{hand.bid_box|tojson|forceescape}}' data-quad='{{hand.get("bid_quad")|tojson|forceescape}}' data-value-boxes='{{hand.get("value_boxes")|tojson|forceescape}}' data-sheet='{{hand.get("sheet_box")|tojson|forceescape}}' data-rotation="{{hand.rotation or 0}}" data-photo="{{hand.photo_id or ''}}" aria-label="Vis melding på foto for hånd {{hand.number}}" title="Vis melding på foto">👁</button>{% endif %}</div></td>
+<td><select style="width:115px" name="bidder_{{i}}" class="import-bidder import-editable {{'problematic' if hand_field_issues[i].bidder else ''}}"><option value="">—</option>{% for name in data.players %}<option value="{{name}}" {% if hand.bidder==name %}selected{% endif %}>{{name}}</option>{% endfor %}{% if hand.bidder and hand.bidder not in data.players %}<option value="{{hand.bidder}}" selected>{{hand.bidder}}</option>{% endif %}</select></td>
+<td><select style="width:125px" name="bid_{{i}}" class="import-bid import-editable {{'problematic' if hand_field_issues[i].bid else ''}} {{'uncertain' if hand.bid_uncertain or (hand.source_json is defined and ('?' in (hand.source_json.notes|join(' ')))) else ''}}" data-source-uncertain="{{'true' if hand.bid_uncertain or (hand.source_json is defined and ('?' in (hand.source_json.notes|join(' ')))) else 'false'}}"><option value="">—</option>{% for bid in bid_options %}<option value="{{bid}}" {% if hand.bid|lower|replace(' ','_')==bid or (hand.bid|lower in ['alm','almindelige'] and bid=='almindelige') or (hand.bid|lower=='bordlægger' and bid=='bordlaegger') %}selected{% endif %}>{{bid}}</option>{% endfor %}</select></td>
+<td><input class="import-editable {{'problematic' if hand_field_issues[i].target else ''}} {{'uncertain' if '?' in hand.target else ''}}" style="width:65px" name="target_{{i}}" value="{{hand.target}}"></td>
+<td><input class="import-editable {{'problematic' if hand_field_issues[i].actual else ''}} {{'uncertain' if '?' in hand.actual else ''}}" style="width:55px" name="actual_{{i}}" value="{{hand.actual}}" readonly aria-label="Stik (beregnet)" title="Beregnes automatisk ud fra scoreændringer"></td>
+<td><select disabled aria-label="Makker (beregnet)" class="import-partner import-editable {{'problematic' if hand_field_issues[i].partner else ''}}" style="width:115px" name="partner_{{i}}"><option value="">—</option>{% for name in data.players %}<option value="{{name}}" {% if hand.partner==name %}selected{% endif %}>{{name}}</option>{% endfor %}{% if hand.partner and hand.partner not in data.players %}<option value="{{hand.partner}}" selected>{{hand.partner}}</option>{% endif %}</select></td>
+{% for name in data.players %}<td><input class="import-score import-editable {{'uncertain' if '?' in hand.scores.get(name, '') else ''}} {{'problematic' if name in hand_field_issues[i].scores else ''}}" style="width:75px" inputmode="decimal" name="score_{{i}}_{{loop.index0}}" value="{{hand.scores.get(name, '')}}" aria-label="{{name}} score, hånd {{hand.number}}"></td>{% endfor %}
+<td><div style="display:flex;gap:.3rem;align-items:center"><button type="button" class="move-hand-up" aria-label="Flyt hånd op">↑</button><button type="button" class="move-hand-down" aria-label="Flyt hånd ned">↓</button><button type="button" class="insert-hand-after" aria-label="Indsæt hånd efter">+</button><button type="button" class="delete-hand" aria-label="Slet hånd">×</button></div></td>
+<td class="import-extras" data-players='{{data.players|tojson|forceescape}}' data-existing='{{hand.extra|tojson|forceescape}}'>
+  <div class="import-extra-inline" style="display:flex;align-items:center;gap:.35rem;flex-wrap:wrap">
+    <div class="extra-selects" style="display:flex;align-items:center;gap:.25rem;flex-wrap:wrap"></div>
+    <button type="button" class="add-extra" style="white-space:nowrap">+ Gå med</button>
+  </div>
+</td>
+</tr>{% endfor %}</tbody>
+<tfoot><tr id="import-total-row"><th colspan="6" style="text-align:right">Total (beregnet fra scoreændringer)</th>
+{% for name in data.players %}<th><output class="import-player-total" data-player-index="{{loop.index0}}">—</output></th>{% endfor %}<th colspan="2"></th></tr></tfoot>
+</table></div>
+<p class="muted">Ved SOL, Ren sol og Bordlægger kan op til to ekstra spillere gå med.</p>
+<button id="add-import-hand" type="button">+ Indsæt hånd</button>
+<dialog id="import-check-dialog" style="max-width:min(90vw,440px);border:1px solid #888;border-radius:10px;padding:1.25rem">
+  <h3 id="import-check-title">Hånd</h3>
+  <p id="import-check-message" role="status"></p>
+  <div style="display:flex;gap:.5rem;justify-content:flex-end">
+    <button type="button" id="import-check-run">↻ Kontrollér igen</button>
+    <button type="button" id="import-check-close">Luk</button>
+  </div>
+</dialog>
+<style>
+.import-status { min-width:2.5rem; padding:.4rem; border:0; border-radius:.35rem; font-weight:700; color:#10251b; background:#8bdf9c; }
+.import-status[data-state="error"] { background:#ffb6a9; color:#38120b; cursor:pointer; }
+.import-status[data-state="pending"] { background:#ddd; color:#333; cursor:pointer; }
+.import-editable.uncertain,.import-editable.problematic { background:#ffe39b; color:#453200; border:2px solid #bf8700; }
+/* Computed values should read as labels, not as interactive dropdowns. */
+.import-partner:disabled { appearance:none; -webkit-appearance:none; background:#293943; color:#e8eff3; opacity:1; border:1px solid #40535e; pointer-events:none; cursor:default; }
+input[readonly] { background:#293943; color:#e8eff3; opacity:1; cursor:default; }
+.import-partner.problematic:disabled { background:#ffe39b; color:#453200; }
+.import-hand-tools { display:flex; align-items:center; gap:.25rem; white-space:nowrap; }
+.import-hand-tools button { flex-shrink:0; }
+.import-hand-tools details { display:inline-block; }
+.import-hand-tools summary { cursor:pointer; }
+.import-bid { background:#102630; color:#e8eff3; border-color:#40535e; }
+.import-bid.uncertain,.import-bid.problematic { background:#ffe39b; color:#453200; }
+.import-status[data-state="checking"] { background:#ddd; color:#333; cursor:wait; }
+</style>
+<script>
+(() => {
+  const form = document.querySelector('form[action="/import/commit"]');
+  const dataField = form.querySelector('[name="data"]');
+  const initialData = JSON.parse(dataField.value);
+  const players = [...document.querySelectorAll('.import-player-name')].map(input => input.value.trim());
+  const registeredBids = {{bid_options|tojson}};
+  const body = document.getElementById('import-hands-body');
+  const summary = document.getElementById('import-review-summary');
+  function refreshOverview() {
+    const rows = [...body.querySelectorAll('tr.import-hand')];
+    const flagged = rows.filter(row => row.querySelector('.uncertain') ||
+      row.querySelector('.import-editable.problematic')).length;
+    const invalid = rows.filter(row => row.querySelector('.import-status').dataset.state === 'error').length;
+    const aiRows = rows.filter(row => row.querySelector('.show-row-json')).length;
+    summary.textContent = `${rows.length} hænder · ${flagged} med markerede usikkerheder/advarsler · ${invalid} ugyldige · ${aiRows} AI-rækker`;
+    document.querySelectorAll('.import-player-total').forEach((output, index) => {
+      let sum = 0;
+      let complete = true;
+      for (const row of rows) {
+        const raw = row.querySelectorAll('.import-score')[index]?.value.trim();
+        if (!raw || raw.includes('?')) { complete = false; break; }
+        const normalized = raw.replace(/\s/g, '').replace(',', '.');
+        if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) { complete = false; break; }
+        sum += Number(normalized);
+      }
+      output.textContent = complete ? (Math.round(sum * 10000) / 10000).toLocaleString('da-DK', {maximumFractionDigits:4}) : '—';
+      output.title = complete ? 'Sum af indtastede scoreændringer' : 'Kan ikke beregnes: manglende eller usikker score';
+    });
+  }
+  body.addEventListener('input', refreshOverview);
+  body.addEventListener('change', refreshOverview);
+  new MutationObserver(refreshOverview).observe(body, {childList:true, subtree:true, attributes:true, attributeFilter:['data-state', 'class']});
+  refreshOverview();
+  const dialog = document.getElementById('import-check-dialog');
+  const message = document.getElementById('import-check-message');
+  const title = document.getElementById('import-check-title');
+  const timers = new WeakMap();
+  const special = new Set(['sol', 'ren_sol', 'bordlaegger']);
+  let currentRow = null;
+  const rowTemplate = body.querySelector('tr.import-hand')?.cloneNode(true);
+
+  document.getElementById('import-check-close').addEventListener('click', () => dialog.close());
+  document.getElementById('import-check-run').addEventListener('click', () => { if (currentRow) checkRow(currentRow); });
+
+  function value(row, field) {
+    const i = row.dataset.hand;
+    return row.querySelector(`[name="${field}_${i}"]`)?.value || '';
+  }
+
+  function handData(row) {
+    const i = row.dataset.hand;
+    const scores = {};
+    players.forEach((name, j) => {
+      scores[name] = row.querySelector(`[name="score_${i}_${j}"]`)?.value || '';
+    });
+    return {
+      number: Number(row.querySelector('.import-status').textContent),
+      bidder: value(row, 'bidder'), bid: value(row, 'bid'), target: value(row, 'target'),
+      actual: value(row, 'actual'), partner: value(row, 'partner'),
+      actual_explicit: row.dataset.actualExplicit === 'true',
+      partner_explicit: row.dataset.partnerExplicit === 'true',
+      extra: [...row.querySelectorAll('.extra-selects select')].map(x => x.value).filter(Boolean),
+      scores
+    };
+  }
+
+  async function checkRow(row) {
+    const button = row.querySelector('.import-status');
+    const snapshot = JSON.stringify(handData(row));
+    const serial = (Number(row.dataset.checkSerial) || 0) + 1;
+    row.dataset.checkSerial = serial;
+    button.dataset.state = 'checking';
+    message.textContent = 'Kontrollerer…';
+    try {
+      const response = await fetch('/import/check-hand', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({players, hand:handData(row)})
+      });
+      if (!response.ok) throw new Error('Serverfejl (' + response.status + ')');
+      const result = await response.json();
+      if (row.dataset.checkSerial !== String(serial) || JSON.stringify(handData(row)) !== snapshot) return;
+      const issues = [...new Set([...result.issues, ...(result.contract_issues || [])])];
+      button.dataset.state = issues.length ? 'error' : 'ok';
+      button.title = issues.join('; ') || 'Hånden er valideret';
+      message.textContent = issues.join(' · ') || '✓ Hånden er valideret';
+      row.dataset.fieldIssues = JSON.stringify(result.field_issues || {});
+      applyFieldIssues(row, result.field_issues || {});
+      const i = row.dataset.hand;
+      const actual = row.querySelector(`[name="actual_${i}"]`);
+      const partner = row.querySelector(`[name="partner_${i}"]`);
+      if (actual && result.hand.actual !== undefined) actual.value = result.hand.actual;
+      if (partner && result.hand.partner !== undefined) {
+        partner.value = result.hand.partner;
+        row.querySelector('.import-partner').value = result.hand.partner;
+      }
+    } catch (error) {
+      if (row.dataset.checkSerial !== String(serial) || JSON.stringify(handData(row)) !== snapshot) return;
+      button.dataset.state = 'error';
+      button.title = error.message;
+      message.textContent = 'Kontrol mislykkedes: ' + error.message;
+    }
+  }
+
+  function scheduleCheck(row) {
+    const button = row.querySelector('.import-status');
+    row.dataset.checkSerial = String((Number(row.dataset.checkSerial) || 0) + 1);
+    button.dataset.state = 'pending';
+    button.title = 'Ændret – genberegner';
+    clearTimeout(timers.get(row));
+    timers.set(row, setTimeout(() => checkRow(row), 350));
+  }
+
+  function markUncertain(input) {
+    input.classList.toggle('uncertain', input.value.includes('?') || input.dataset.sourceUncertain === 'true');
+  }
+
+  function applyFieldIssues(row, fields) {
+    row.querySelector('.import-bidder').classList.toggle('problematic', !!fields.bidder);
+    row.querySelector('.import-bid').classList.toggle('problematic', !!fields.bid);
+    row.querySelector(`[name="target_${row.dataset.hand}"]`).classList.toggle('problematic', !!fields.target);
+    row.querySelector(`[name="actual_${row.dataset.hand}"]`).classList.toggle('problematic', !!fields.actual);
+    row.querySelector('.import-partner').classList.toggle('problematic', !!fields.partner);
+    row.querySelectorAll('.import-score').forEach((input, index) => {
+      input.classList.toggle('problematic', (fields.scores || []).includes(players[index]));
+    });
+    row.querySelector('.import-extras').classList.toggle('problematic', !!fields.extra);
+  }
+
+  function refreshPlayerOptions(oldName, newName) {
+    for (const row of body.querySelectorAll('tr.import-hand')) {
+      try {
+        const issues = JSON.parse(row.dataset.fieldIssues || '{}');
+        issues.scores = (issues.scores || []).map(name => name === oldName ? newName : name);
+        row.dataset.fieldIssues = JSON.stringify(issues);
+        applyFieldIssues(row, issues);
+      } catch (_) {}
+      for (const select of row.querySelectorAll('.import-bidder, .import-partner, .extra-selects select')) {
+        const selected = select.value === oldName ? newName : select.value;
+        for (const option of [...select.options]) {
+          if (option.value && !players.includes(option.value)) option.remove();
+        }
+        for (const player of players) {
+          if (![...select.options].some(option => option.value === player)) select.add(new Option(player, player));
+        }
+        select.value = selected;
+      }
+      const cell = row.querySelector('.import-extras');
+      if (cell) cell.dataset.players = JSON.stringify(players);
+      scheduleCheck(row);
+    }
+    document.querySelectorAll('[data-player-column]').forEach((header, index) => {
+      header.textContent = (players[index] || '') + ' Δ';
+    });
+  }
+
+  function reindexRows() {
+    [...body.querySelectorAll('tr.import-hand')].forEach((row, index) => {
+      row.dataset.hand = index;
+      row.querySelector('.import-status').textContent = String(index + 1);
+      row.querySelector('.import-bidder').name = `bidder_${index}`;
+      row.querySelector('.import-bid').name = `bid_${index}`;
+      row.querySelector(`[name^="target_"]`).name = `target_${index}`;
+      row.querySelector(`[name^="actual_"]`).name = `actual_${index}`;
+      row.querySelector(`[name^="partner_"]`).name = `partner_${index}`;
+      row.querySelectorAll('.import-score').forEach((input, playerIndex) => {
+        input.name = `score_${index}_${playerIndex}`;
+        input.setAttribute('aria-label', `${players[playerIndex] || 'Spiller'} score, hånd ${index + 1}`);
+      });
+      row.querySelectorAll('.extra-selects select').forEach(select => { select.name = `extra_${index}`; });
+      row.querySelector('.move-hand-up').disabled = index === 0;
+      row.querySelector('.move-hand-down').disabled = index === body.querySelectorAll('tr.import-hand').length - 1;
+    });
+  }
+
+  function bindRow(row) {
+    const status = row.querySelector('.import-status');
+    status.addEventListener('click', () => {
+      if (status.dataset.state === 'ok') return;
+      currentRow = row;
+      title.textContent = 'Hånd ' + status.textContent;
+      message.textContent = status.title;
+      dialog.showModal();
+    });
+
+    row.querySelectorAll('input, select').forEach(input => {
+      input.addEventListener('input', () => {
+        if (input.dataset.sourceUncertain === 'true') input.dataset.sourceUncertain = 'false';
+        if (input.classList.contains('import-editable')) markUncertain(input);
+        if (input.name === `actual_${row.dataset.hand}`) row.dataset.actualExplicit = 'true';
+        if (input.classList.contains('import-partner')) row.dataset.partnerExplicit = 'true';
+        scheduleCheck(row);
+      });
+      input.addEventListener('change', () => {
+        if (input.dataset.sourceUncertain === 'true') { input.dataset.sourceUncertain = 'false'; markUncertain(input); }
+        if (input.classList.contains('import-partner')) row.dataset.partnerExplicit = 'true';
+        scheduleCheck(row);
+      });
+      if (input.classList.contains('import-editable')) markUncertain(input);
+    });
+    try {
+      applyFieldIssues(row, JSON.parse(row.dataset.fieldIssues || '{}'));
+    } catch (_) {
+      applyFieldIssues(row, {});
+    }
+
+    const cell = row.querySelector('.import-extras');
+    const container = cell.querySelector('.extra-selects');
+    const add = cell.querySelector('.add-extra');
+    const bid = row.querySelector('.import-bid');
+    const bidder = row.querySelector('.import-bidder');
+    const existing = JSON.parse(cell.dataset.existing || '[]');
+
+    function refresh() {
+      const enabled = special.has(bid.value.toLowerCase().replaceAll(' ', '_'));
+      container.hidden = !enabled;
+      const selects = [...container.querySelectorAll('select')];
+      const selected = selects.map(select => select.value).filter(Boolean);
+      for (const select of selects) {
+        for (const option of select.options) {
+          if (!option.value) continue;
+          option.disabled = option.value === bidder.value ||
+            (option.value !== select.value && selected.includes(option.value));
+        }
+        select.disabled = !enabled;
+      }
+      add.hidden = !enabled || selects.length >= 2;
+    }
+
+    function addPlayer(selectedValue = '') {
+      if (container.querySelectorAll('select').length >= 2) return;
+      const wrapper = document.createElement('div');
+      wrapper.style.cssText = 'display:flex;gap:.25rem;align-items:center';
+      const select = document.createElement('select');
+      select.name = `extra_${row.dataset.hand}`;
+      select.style.width = '110px';
+      select.setAttribute('aria-label', 'Ekstra melder');
+      select.add(new Option('Vælg spiller', ''));
+      for (const player of players) select.add(new Option(player, player));
+      if (selectedValue && !players.includes(selectedValue)) select.add(new Option(selectedValue, selectedValue));
+      select.value = selectedValue;
+      select.addEventListener('change', () => { refresh(); scheduleCheck(row); });
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = '×';
+      remove.title = 'Fjern ekstra melder';
+      remove.setAttribute('aria-label', 'Fjern ekstra melder');
+      remove.addEventListener('click', () => { wrapper.remove(); refresh(); scheduleCheck(row); });
+      wrapper.append(select, remove);
+      container.append(wrapper);
+      refresh();
+    }
+
+    add.addEventListener('click', () => { addPlayer(); scheduleCheck(row); });
+    bid.addEventListener('change', refresh);
+    bidder.addEventListener('change', refresh);
+    existing.slice(0, 2).forEach(addPlayer);
+    row.querySelector('.move-hand-up').addEventListener('click', () => {
+      const previous = row.previousElementSibling;
+      if (previous) body.insertBefore(row, previous);
+      reindexRows();
+    });
+    row.querySelector('.move-hand-down').addEventListener('click', () => {
+      const next = row.nextElementSibling;
+      if (next) body.insertBefore(next, row);
+      reindexRows();
+    });
+    row.querySelector('.insert-hand-after').addEventListener('click', () => insertRow(row));
+    row.querySelector('.delete-hand').addEventListener('click', () => {
+      row.remove();
+      reindexRows();
+    });
+    refresh();
+    scheduleCheck(row);
+  }
+
+  body.querySelectorAll('tr.import-hand').forEach(bindRow);
+  reindexRows();
+  refreshOverview();
+  document.querySelectorAll('.import-player-name').forEach((input, playerIndex) => {
+    input.addEventListener('input', () => {
+      const oldName = players[playerIndex];
+      const newName = input.value.trim();
+      if (oldName === newName) return;
+      players[playerIndex] = newName;
+      refreshPlayerOptions(oldName, newName);
+    });
+  });
+
+  function insertRow(afterRow = null) {
+    if (!rowTemplate) return;
+    const row = rowTemplate.cloneNode(true);
+    row.dataset.sourceId = `new-${crypto.randomUUID ? crypto.randomUUID() : Date.now() + Math.random()}`;
+    row.dataset.actualExplicit = 'false';
+    row.dataset.partnerExplicit = 'false';
+    row.dataset.fieldIssues = '{}';
+    row.dataset.hand = String(body.querySelectorAll('tr.import-hand').length);
+    row.querySelector('.import-status').dataset.state = 'error';
+    row.querySelector('.import-status').title = 'Ny hånd skal udfyldes og valideres';
+    row.querySelectorAll('.import-status').forEach(button => { button.textContent = ''; });
+    row.querySelector('.import-bidder').value = '';
+    row.querySelector('.import-bid').value = '';
+    row.querySelectorAll('.import-bidder option').forEach(option => {
+      if (option.value && !players.includes(option.value)) option.remove();
+    });
+    row.querySelectorAll('.import-bid option').forEach(option => {
+      if (option.value && !registeredBids.includes(option.value)) option.remove();
+    });
+    row.querySelector('[name^="target_"]').value = '';
+    row.querySelector('[name^="actual_"]').value = '';
+    row.querySelector('[name^="partner_"]').value = '';
+    row.querySelectorAll('.import-editable').forEach(input => {
+      input.classList.remove('uncertain', 'problematic');
+      if (input.classList.contains('import-score')) input.value = '';
+      else if (input.matches('[name^="target_"]')) input.value = '';
+    });
+    row.querySelector('.extra-selects').replaceChildren();
+    row.querySelector('.import-extras').dataset.existing = '[]';
+    row.querySelector('td:first-child details')?.remove();
+    if (afterRow) afterRow.after(row); else body.append(row);
+    bindRow(row);
+    reindexRows();
+    scheduleCheck(row);
+  }
+  document.getElementById('add-import-hand').addEventListener('click', () => insertRow());
+
+  function syncReviewData() {
+    const data = JSON.parse(dataField.value);
+    data.players = players.map(name => name.trim());
+    data.hands = [...body.querySelectorAll('tr.import-hand')].map((row, index) => {
+      const sourceId = row.dataset.sourceId;
+      const sourceHand = (initialData.hands || []).find(hand => hand.source_id === sourceId) || {};
+      return {
+        ...sourceHand,
+        ...handData(row),
+        number: index + 1,
+        source_id: sourceId,
+        scores: handData(row).scores,
+      };
+    });
+    dataField.value = JSON.stringify(data);
+  }
+  const draftId = initialData.ai_job_id;
+  let saveTimer;
+  async function saveDraft() {
+    if (!draftId) return;
+    syncReviewData();
+    const payload = {
+      data: JSON.parse(dataField.value),
+      title: form.querySelector('[name="title"]')?.value || '',
+      game_date: form.querySelector('[name="game_date"]')?.value || '',
+      date_precision: form.querySelector('[name="date_precision"]')?.value || 'unknown'
+    };
+    try {
+      const response = await fetch(`/import/current/${draftId}/save`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error('Kunne ikke gemme');
+      const status = document.getElementById('import-draft-status');
+      if (status) status.textContent = 'Gemt';
+    } catch (_) {
+      const status = document.getElementById('import-draft-status');
+      if (status) status.textContent = 'Kunne ikke gemme – prøv igen';
+    }
+  }
+  if (draftId) {
+    const status = document.createElement('span');
+    status.id = 'import-draft-status';
+    status.textContent = 'Gemmes automatisk';
+    form.prepend(status);
+    form.addEventListener('input', () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 800); });
+    form.addEventListener('change', () => { clearTimeout(saveTimer); saveTimer = setTimeout(saveDraft, 800); });
+    const leave = document.createElement('a');
+    leave.href = '/import/current'; leave.textContent = 'Gem og gå til aktuelle importer';
+    leave.addEventListener('click', async event => {
+      event.preventDefault(); clearTimeout(saveTimer); await saveDraft();
+      window.location.assign(leave.href);
+    });
+    form.prepend(leave);
+  }
+  form.addEventListener('submit', syncReviewData);
+})();
+</script>
+</section>
+<button type="submit">Kontrollér og gem spilaften</button>
+</form>
+{% endif %}
+<p><a href="/">← Spilaftener</a></p>
+{% endblock %}

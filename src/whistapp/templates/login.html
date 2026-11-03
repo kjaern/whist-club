@@ -1,0 +1,18 @@
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Log ind · Whist</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<main>
+  <section class="card" style="max-width:420px;margin:10vh auto">
+    <h1>
+      ♠ Whist
+    </h1>
+    <form method="post" action="/login">
+      <label>Brugernavn<input name="username" autocomplete="username" required autofocus></label><label>Adgangskode<input name="password" type="password" autocomplete="current-password" required></label>
+      {% if error %}
+        <p role="alert">
+          {{error}}
+        </p>
+      {% endif %}
+      <button type="submit">Log ind</button>
+    </form>
+  </section>
+</main>
+</body></html>

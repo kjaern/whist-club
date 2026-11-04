@@ -23,6 +23,9 @@ def test_admin_creates_account_and_user_changes_password():
             assert member.post('/login', data={'username':'newmember','password':pw}, follow_redirects=False).status_code == 303
             assert member.get('/club', follow_redirects=False).status_code == 303
             assert member.get('/account').status_code == 200
+            # Static assets must load while the password change is pending, or the page renders unstyled.
+            css = member.get('/static/style.css', follow_redirects=False)
+            assert css.status_code == 200 and 'text/css' in css.headers['content-type']
             assert member.post('/account/password', data={'current_password':pw, 'new_password':'eight123', 'confirm_password':'eight123'}, follow_redirects=False).headers['location'] == '/'
             assert 'Spilaftener' in member.get('/').text
             assert 'Testmedlem' in member.get('/').text

@@ -336,7 +336,9 @@ def editor_results(request: Request, sid: int):
 
 
 @router.get("/sessions/{sid}/editor/events")
-async def editor_events(request: Request, sid: int):
+async def editor_events(request: Request, sid: int, hand: str = ""):
+    """`hand` is the last hand the page's form was built after. A phone that slept
+    reconnects with it, so hands saved in the meantime are reported at once."""
     initial = await asyncio.to_thread(_results_signature, sid)
 
     def latest_hand():
@@ -353,6 +355,10 @@ async def editor_events(request: Request, sid: int):
         previous = initial
         previous_hand = initial_hand
         yield ": connected\n\n"
+        if hand.isdigit() and int(hand) != previous_hand[0]:
+            # The page's form is stale whoever saved the hand, so no origin is sent.
+            payload = json.dumps({"new_hand": True, "origin": None})
+            yield f"event: results-changed\ndata: {payload}\n\n"
         while not await request.is_disconnected():
             await asyncio.sleep(1.5)
             current = await asyncio.to_thread(_results_signature, sid)
@@ -536,7 +542,19 @@ async def create_hand(request: Request, sid: int):
         raise HTTPException(400, f"Invalid hand or result: {exc}")
 
     with connect() as db:
+        # Take the write lock before checking, so two devices cannot both pass the check.
+        db.execute("BEGIN IMMEDIATE")
         require_open(db, sid)
+        # A form built before another device saved a hand is stale: it shows the old
+        # declarer and rotation. Refuse it and send back a fresh form instead.
+        base = str(form.get("base_hand_id", "")).strip()
+        if base:
+            latest = db.execute(
+                "SELECT COALESCE(MAX(id),0) FROM hands WHERE session_id=?", (sid,)
+            ).fetchone()[0]
+            if not base.isdigit() or int(base) != latest:
+                data = view_data(db, sid)
+                return render(request, "partials/session_content.html", hand_conflict=True, **data)
         allowed = {
             r[0]
             for r in db.execute(

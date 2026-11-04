@@ -354,6 +354,8 @@ def view_data(db, sid):
         totals={k: fmt(v) for k, v in totals.items()},
         score_colors=score_colors,
         suggested=suggested,
+        # The new-hand form remembers which hand it was built after, to refuse stale saves.
+        last_hand_id=hands[-1]["id"] if hands else 0,
         rules=load_rules(session_bid_settings(session)),
         enabled_bids=enabled_bid_keys(session_bid_settings(session)),
         money_mode=money_mode,

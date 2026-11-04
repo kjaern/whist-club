@@ -95,22 +95,44 @@
       event.detail.parameters.origin_client_id = window.whistClientId;
     }
   });
-  const stream = new EventSource(`/sessions/${sessionId}/editor/events`);
-  let pending = false;
-  stream.addEventListener('results-changed', function (event) {
-    let change; try { change = JSON.parse(event.data); } catch { return; }
+  let pending = false, stream = null, opened = false, retry = null, delay = 2000;
+  function refreshResults() {
     if (!document.getElementById('editor-results') || pending) return;
     pending = true;
     htmx.ajax('GET', `/sessions/${sessionId}/editor/results`, {
       target: '#editor-results', swap: 'outerHTML'
     }).finally(() => { pending = false; });
+  }
+  function onChange(event) {
+    let change; try { change = JSON.parse(event.data); } catch { return; }
+    refreshResults();
     if (change.new_hand && change.origin !== window.whistClientId && document.getElementById('new-hand-area')) {
       htmx.ajax('GET', `/sessions/${sessionId}/editor/new-hand`, {
         target: '#new-hand-area', swap: 'outerHTML'
       });
     }
-  });
-  window.addEventListener('pagehide', () => stream.close());
+  }
+  // Phones drop the stream while asleep. We reconnect ourselves (not the browser's
+  // automatic retry) so the URL always carries the hand the current form was built after;
+  // the server then reports anything saved while we were away.
+  function connect() {
+    clearTimeout(retry); retry = null;
+    if (stream) stream.close();
+    const base = document.querySelector('#new-hand-form [name=base_hand_id]')?.value || '';
+    stream = new EventSource(`/sessions/${sessionId}/editor/events?hand=${encodeURIComponent(base)}`);
+    stream.addEventListener('open', () => { delay = 2000; if (opened) refreshResults(); opened = true; });
+    stream.addEventListener('results-changed', onChange);
+    stream.addEventListener('error', () => {
+      stream.close();
+      if (!retry && document.visibilityState === 'visible') {
+        retry = setTimeout(connect, delay); delay = Math.min(delay * 2, 30000);
+      }
+    });
+  }
+  connect();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') connect(); });
+  window.addEventListener('pageshow', (event) => { if (event.persisted) connect(); });
+  window.addEventListener('pagehide', () => { clearTimeout(retry); stream && stream.close(); });
 })();
 </script>
 {% endblock %}

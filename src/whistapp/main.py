@@ -63,7 +63,7 @@ async def _authorized_request(request, call_next, path):
     clubless = path in CLUBLESS_PATHS or path.startswith("/static/") or path.startswith("/admin/")
     if not is_server_admin(request):
         account = current_account(request)
-        if account and account["must_change_password"] and path not in ("/", "/account", "/account/password", "/logout"):
+        if account and account["must_change_password"] and path not in ("/", "/account", "/account/password", "/logout") and not path.startswith("/static/"):
             return RedirectResponse("/account", status_code=303)
         if path.startswith("/admin/"):
             return PlainTextResponse("Kun serveradministrator", status_code=403)

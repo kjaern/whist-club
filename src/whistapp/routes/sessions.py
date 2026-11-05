@@ -20,6 +20,7 @@ from whistapp.bids.registry import get_bid
 from .imports import _photo_list, _session_source_view, PHOTO_ROOT, SOURCE_ROOT
 from ..auth import current_account, is_server_admin
 from ..club import active_club_id, club_players, club_settings
+from ..buildinfo import build_stamp
 from ..database import connect
 from ..finance import export_workbook, settlement_entries
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
@@ -105,7 +106,8 @@ async def create_session(request: Request):
     with connect() as db:
         sid = db.execute(
             """INSERT INTO sessions(title,rotation_mode,is_club,placement_rates,fejl40_rate,club_id,
-                money_mode,point_rate,bid_settings) VALUES (?,?,?,?,?,?,?,?,?)""",
+                money_mode,point_rate,bid_settings,server_version,server_commit)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 title,
                 rotation_mode,
@@ -116,6 +118,7 @@ async def create_session(request: Request):
                 defaults["money_mode"],
                 defaults["point_rate"],
                 defaults["bid_settings"],
+                *build_stamp(),
             ),
         ).lastrowid
         db.executemany(

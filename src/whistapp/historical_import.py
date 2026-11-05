@@ -16,6 +16,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from .bids.registry import get_bid
+from .buildinfo import build_stamp
 from .club import active_club_id
 from .rules import load_rules, rules_snapshot, target_for
 
@@ -858,9 +859,10 @@ def save_import(db, data, title, created_at, member_mapping, replace_id=None):
         )
     else:
         sid = db.execute(
-            """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id)
-             VALUES (?,?,?,'imported',?,0,?)""",
-            (title, created_at, created_at, int(all(member_mapping.values())), active_club_id()),
+            """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id,
+             server_version,server_commit) VALUES (?,?,?,'imported',?,0,?,?,?)""",
+            (title, created_at, created_at, int(all(member_mapping.values())), active_club_id(),
+             *build_stamp()),
         ).lastrowid
 
     ids = {}

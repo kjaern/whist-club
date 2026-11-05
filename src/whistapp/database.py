@@ -315,6 +315,12 @@ def init_db():
                 "ALTER TABLE sessions ADD COLUMN date_precision TEXT NOT NULL DEFAULT 'minute'"
             )
 
+        # Server build that created the night; NULL for nights created before this was
+        # recorded (fill those explicitly with `whistapp stamp-night`).
+        for column in ("server_version", "server_commit"):
+            if column not in scols:
+                db.execute(f"ALTER TABLE sessions ADD COLUMN {column} TEXT")
+
         if "collect_club_money" not in scols:
             db.execute("ALTER TABLE sessions ADD COLUMN collect_club_money INTEGER")
             db.execute(

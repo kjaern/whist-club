@@ -1,12 +1,9 @@
 """Shared web helpers: templates, permission checks and night lookups used by the route modules."""
 
 import json
-import os
 import re
-import subprocess
 
 from fractions import Fraction
-from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -14,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from whistapp.bids.registry import registered_bids
 
 from .auth import current_account, is_server_admin
+from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
 from .finance import MONEY_MODES
@@ -135,29 +133,6 @@ def member_operation_allowed(path, method):
 
 
 templates = Jinja2Templates(directory=ROOT / "templates")
-
-
-def application_version():
-    try:
-        return package_version("whistapp")
-    except PackageNotFoundError:
-        return "dev"
-
-
-def application_commit():
-    commit = os.environ.get("WHIST_GIT_COMMIT", "").strip()
-    if not commit:
-        try:
-            commit = subprocess.check_output(
-                ["git", "rev-parse", "--short=7", "HEAD"],
-                cwd=ROOT.parent,
-                stderr=subprocess.DEVNULL,
-                timeout=2,
-                text=True,
-            ).strip()
-        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            return "unknown"
-    return commit[:7]
 
 
 templates.env.globals["app_version"] = application_version()

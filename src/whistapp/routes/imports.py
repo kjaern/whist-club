@@ -18,6 +18,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from whistapp.bids.registry import registered_bids
 
+from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import settlement_entries
@@ -1604,9 +1605,9 @@ async def import_final(request: Request):
             raise HTTPException(400, "Dublerede klubmedlemmer")
 
         sid = db.execute(
-            """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id)
-              VALUES (?,?,?,'imported',?,0,?)""",
-            (title, timestamp, timestamp, int(all(mapping)), active_club_id()),
+            """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id,
+              server_version,server_commit) VALUES (?,?,?,'imported',?,0,?,?,?)""",
+            (title, timestamp, timestamp, int(all(mapping)), active_club_id(), *build_stamp()),
         ).lastrowid
         db.execute(
             "UPDATE sessions SET date_precision=? WHERE id=?", (date_precision, sid)

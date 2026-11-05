@@ -72,6 +72,27 @@ docker compose logs --tail=100 whist
 The running tunnel does not need rebuilding for ordinary application changes.
 To start it on a fresh deployment, use `--profile tunnel` as above.
 
+## Stamping nights created before version tracking
+
+Each night records the server version and commit that created it, shown on the
+night's page. Nights created before this existed have no stamp. Starting the
+new build adds the columns; stamping an old night is a manual, one-time step,
+because only you know which build it was played on.
+
+Back up first (the online backup is safe while the server runs):
+
+```sh
+docker compose exec whist python -c "import sqlite3; s=sqlite3.connect('/var/lib/whist/data/whist.sqlite3'); d=sqlite3.connect('/var/lib/whist/data/whist-backup-before-stamp.sqlite3'); s.backup(d); d.close()"
+```
+
+List the nights, then stamp the right one by its id (it refuses to overwrite an
+existing stamp unless `--force` is given):
+
+```sh
+docker compose exec whist whistapp stamp-night --list
+docker compose exec whist whistapp stamp-night --night <id> --version 1.0.0 --commit 338dfb5
+```
+
 ## Reset the test database
 
 **Destructive:** this removes all game nights, hands, scores, settlements, and

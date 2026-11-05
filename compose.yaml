@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     user: "${WHIST_UID:-10001}:${WHIST_GID:-10001}"
     environment:
+      # Log/OS clock in Danish time; the app converts stored UTC itself and does not depend on this.
+      TZ: Europe/Copenhagen
       WHIST_LLM_BASE_URL: ${WHIST_LLM_BASE_URL:-}
       WHIST_LLM_MODEL: ${WHIST_LLM_MODEL:-}
       WHIST_LLM_API_KEY: ${WHIST_LLM_API_KEY:-}

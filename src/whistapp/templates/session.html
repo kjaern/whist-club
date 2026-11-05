@@ -79,7 +79,7 @@
   {% endif %}
   {% if change_logs %}
   <section class="card"><h2>Ændringslog</h2>
-    <ul>{% for entry in change_logs %}<li><time>{{entry.created_at}}</time> · {{entry.user_id}} · {{entry.description}}</li>{% endfor %}</ul>
+    <ul>{% for entry in change_logs %}<li><time>{{entry.created_at|local_time}}</time> · {{entry.user_id}} · {{entry.description}}</li>{% endfor %}</ul>
   </section>
   {% endif %}
   <div id="session-content">

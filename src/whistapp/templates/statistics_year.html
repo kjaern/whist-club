@@ -10,7 +10,7 @@
     <section class="card">
       <div class="stats-section-heading">
         <h2>
-          {{ detail.night.created_at[:10] }} · {{ detail.night.title }}
+          {{ night_time(detail.night)[:10] }} · {{ detail.night.title }}
         </h2>
         <a href="/sessions/{{ detail.night.id }}">Se spilaften ↗</a>
       </div>

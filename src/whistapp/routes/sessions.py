@@ -32,6 +32,7 @@ from ..web import (
     render,
     require_open,
     session_bid_settings,
+    session_players,
     session_rules,
     templates,
     view_data,
@@ -159,7 +160,7 @@ def statistics_year(request: Request, year: int, origin: str = "all"):
     with connect() as db:
         nights = db.execute(
             """
-            SELECT s.id, s.title, s.created_at, COUNT(DISTINCT h.id) AS hand_count
+            SELECT s.id, s.title, s.created_at, s.origin, COUNT(DISTINCT h.id) AS hand_count
             FROM sessions s
             JOIN players p ON p.session_id=s.id
             LEFT JOIN hands h ON h.session_id=s.id
@@ -390,10 +391,7 @@ def bid_fields(request: Request, sid: int, bid_key: str):
         bid = session_rules(db, sid).get(bid_key)
         if not bid:
             raise HTTPException(400, "Unknown bid")
-        active = db.execute(
-            "SELECT * FROM players WHERE session_id=? AND active=1 ORDER BY seat_order, id",
-            (sid,),
-        ).fetchall()
+        active = session_players(db, sid, active_only=True)
     return render(request, "partials/target.html", bid=bid, active=active)
 
 

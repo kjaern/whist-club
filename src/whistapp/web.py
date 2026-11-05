@@ -3,8 +3,10 @@
 import json
 import re
 
+from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
@@ -128,7 +130,8 @@ def member_operation_allowed(path, method):
         return (path == "/sessions" or
                 (path.startswith("/import/") and not path.startswith("/import/ai") or
                  path == "/import/ai" or path.startswith("/import/current/")) or
-                bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos)", path)))
+                # Any active member runs the night, including closing and reopening it.
+                bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos|end|reopen)", path)))
     return False
 
 
@@ -216,11 +219,52 @@ def fmt(value):
 templates.env.globals["fmt"] = fmt
 
 
+DISPLAY_TZ = ZoneInfo("Europe/Copenhagen")
+
+
+def local_time(value, imported=False):
+    """Show a stored UTC timestamp (SQLite CURRENT_TIMESTAMP) in Danish time.
+
+    Imported nights store the date typed by the user, which is already Danish
+    wall-clock time, so those are shown unchanged. Independent of the server's TZ."""
+    if not value or imported: return value
+    try:
+        stamp = datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return value
+    return stamp.replace(tzinfo=timezone.utc).astimezone(DISPLAY_TZ).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def night_time(session, field="created_at"):
+    """Danish display time of a night's created_at/ended_at; an imported night's own date stays as typed."""
+    value = session[field]
+    # Imported nights get ended_at=created_at (typed date); a later close stamps UTC like a live night.
+    imported = session["origin"] == "imported" and (field == "created_at" or value == session["created_at"])
+    return local_time(value, imported)
+
+
+templates.env.filters["local_time"] = local_time
+templates.env.globals["night_time"] = night_time
+
+
+# A linked player shows the member's current club name; players.name is only the
+# snapshot from when the night was created (and the name of guests/unlinked players).
+PLAYER_COLUMNS = """p.id,p.session_id,COALESCE(cm.name,p.name) AS name,p.active,p.club_id,
+    p.seat_order,p.member_id FROM players p JOIN sessions ps ON ps.id=p.session_id
+    LEFT JOIN club_members cm ON cm.id=p.member_id AND cm.club_id=ps.club_id"""
+
+
+def session_players(db, sid, active_only=False):
+    return db.execute(
+        f"SELECT {PLAYER_COLUMNS} WHERE p.session_id=?"
+        + (" AND p.active=1" if active_only else "") + " ORDER BY p.seat_order, p.id",
+        (sid,),
+    ).fetchall()
+
+
 def view_data(db, sid):
     session = get_session(db, sid)
-    players = db.execute(
-        "SELECT * FROM players WHERE session_id=? ORDER BY seat_order, id", (sid,)
-    ).fetchall()
+    players = session_players(db, sid)
     hands = list(
         db.execute("SELECT * FROM hands WHERE session_id=? ORDER BY id", (sid,))
     )
@@ -295,7 +339,10 @@ def view_data(db, sid):
 
     penalties = list(
         db.execute(
-            "SELECT pp.*,p.name FROM penalty_payments pp JOIN players p ON p.id=pp.player_id WHERE pp.session_id=? ORDER BY pp.id",
+            """SELECT pp.*,COALESCE(cm.name,p.name) AS name FROM penalty_payments pp
+            JOIN players p ON p.id=pp.player_id JOIN sessions ps ON ps.id=p.session_id
+            LEFT JOIN club_members cm ON cm.id=p.member_id AND cm.club_id=ps.club_id
+            WHERE pp.session_id=? ORDER BY pp.id""",
             (sid,),
         )
     )

@@ -6,7 +6,7 @@
   <h2>Handlinger</h2>
   {% if operations %}
     <ul>{% for operation in operations %}
-      <li><strong>{{operation.actor_username}} {{operation.summary}}</strong> · <time>{{operation.created_at}}</time></li>
+      <li><strong>{{operation.actor_username}} {{operation.summary}}</strong> · <time>{{operation.created_at|local_time}}</time></li>
     {% endfor %}</ul>
   {% else %}<p>Ingen registrerede ændringer endnu.</p>{% endif %}
 </section>

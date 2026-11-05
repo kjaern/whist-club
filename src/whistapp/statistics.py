@@ -13,7 +13,8 @@ def club_statistics(db, roster, session_id=None, origin="all"):
         raise ValueError("Invalid origin")
     club_id = active_club_id()
 
-    names = dict(roster)
+    # Rows are grouped by member id; club_players() yields string ids, players.member_id is int.
+    names = {str(k): v for k, v in roster}
     players = db.execute(
         """
         SELECT p.id, p.member_id AS club_id, p.name, p.session_id, s.created_at, s.title
@@ -86,7 +87,7 @@ def club_statistics(db, roster, session_id=None, origin="all"):
 
     def empty(p):
         return dict(
-            name=names.get(p["club_id"], p["name"]),
+            name=names.get(str(p["club_id"]), p["name"]),
             club_id=p["club_id"],
             nights=set(),
             hands=0,

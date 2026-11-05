@@ -66,7 +66,7 @@
       <button type="submit">Afslut spilaften</button>
     </form>
   {% else %}
-    <strong>✓ Afsluttet {{session.ended_at}}</strong>
+    <strong>✓ Afsluttet {{night_time(session, 'ended_at')}}</strong>
     <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen til rettelse? Tidligere pladsbetaling annulleres og beregnes igen, når du afslutter.')">
       <button type="submit" class="secondary">Genåbn til rettelse</button>
     </form>

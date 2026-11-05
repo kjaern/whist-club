@@ -41,6 +41,8 @@ def test_stamp_night_fills_only_unstamped_nights():
             row = db.execute("SELECT server_version,server_commit FROM sessions WHERE id=?", (sid,)).fetchone()
         assert (row["server_version"], row["server_commit"]) == ("1.0.0", "338dfb5")
         assert "Oprettet med server v1.0.0 · 338dfb5" in client.get(f"/sessions/{sid}").text
+        # The stored-nights lists link to the live/Resultat page, so it must show the stamp too.
+        assert "Oprettet med server v1.0.0 · 338dfb5" in client.get(f"/sessions/{sid}/live").text
 
         with pytest.raises(SystemExit):
             stamp_night(sid, "2.0.0", "abcdef0")

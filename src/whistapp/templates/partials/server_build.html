@@ -1,0 +1,3 @@
+{% if session.server_version or session.server_commit %}
+  <p class="muted server-build"><small>Oprettet med server v{{ session.server_version or '?' }} · {{ session.server_commit or 'ukendt commit' }}</small></p>
+{% endif %}

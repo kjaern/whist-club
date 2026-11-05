@@ -7,9 +7,7 @@
     <a href="/sessions/{{session.id}}/live" target="_blank">Åbn livevisning ↗</a>
     <a class="button secondary" href="/sessions/{{session.id}}/history">Ændringshistorik</a>
   </div>
-  {% if session.server_version or session.server_commit %}
-    <p class="muted server-build"><small>Oprettet med server v{{ session.server_version or '?' }} · {{ session.server_commit or 'ukendt commit' }}</small></p>
-  {% endif %}
+  {% include 'partials/server_build.html' %}
   {% if request.query_params.get("error") == "no_hands" %}
     <p role="alert">
       Registrer mindst én hånd, før du afslutter.

@@ -42,7 +42,10 @@
   </nav>
   {% for stat, table in tables %}
     <section class="card">
-      <h2>{{ stat.title }}</h2>
+      <div class="stats-section-heading">
+        <h2>{{ stat.title }}</h2>
+        <button type="button" class="secondary stat-rule" data-key="{{ stat.key }}" aria-haspopup="dialog">Vis regel</button>
+      </div>
       {% if stat.description %}<p class="muted">{{ stat.description }}</p>{% endif %}
       {% include 'partials/stat_table.html' %}
     </section>
@@ -58,6 +61,30 @@
     </section>
   {% endif %}
   <a href="/">← Spilaftener</a>
+  <dialog id="stat-rule-dialog" class="rules-dialog" aria-labelledby="stat-rule-title">
+    <div class="rules-dialog-heading">
+      <strong id="stat-rule-title">Statistikkens regel</strong><button type="button" class="secondary" id="close-stat-rule" aria-label="Luk regel">Luk ×</button>
+    </div>
+    <div id="stat-rule-panel"></div>
+  </dialog>
+  <script>
+  // Vis regel: the code that computes the statistic, as Vis regler shows a bid's code.
+  (() => {
+    const dialog = document.getElementById('stat-rule-dialog'), panel = document.getElementById('stat-rule-panel');
+    document.addEventListener('click', async event => {
+      const button = event.target.closest('.stat-rule');
+      if (!button) return;
+      panel.textContent = 'Indlæser regel…';
+      dialog.showModal();
+      try {
+        const response = await fetch('/statistics/rules/' + encodeURIComponent(button.dataset.key));
+        panel.innerHTML = response.ok ? await response.text() : 'Reglen kunne ikke indlæses.';
+      } catch (_) { panel.textContent = 'Reglen kunne ikke indlæses.'; }
+    });
+    document.getElementById('close-stat-rule').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+  })();
+  </script>
   <script>
   // Tap a column heading to sort; tap again to reverse. The totals row stays at the bottom.
   document.addEventListener('click', event => {

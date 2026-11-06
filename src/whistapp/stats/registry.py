@@ -26,6 +26,29 @@ TOPICS = [
 ]
 
 
+def statistic(key):
+    """The registered statistic with this key, or None."""
+    return next((s for t in TOPICS for s in t.statistics if s.key == key), None)
+
+
+def rule_sources(stat):
+    """(module name, source) for the statistic's own file, then the statistics helpers it uses.
+
+    The shared plumbing in base.py (tables, columns, formatting) is left out; it computes nothing.
+    """
+    import inspect
+    import sys
+
+    own = sys.modules[type(stat).__module__]
+    used = []
+    for value in vars(own).values():
+        module = getattr(value, "__module__", "") or ""
+        if (module.startswith("whistapp.stats.") and module not in (own.__name__, "whistapp.stats.base")
+                and module not in used):
+            used.append(module)
+    return [(m.rsplit(".", 1)[-1] + ".py", inspect.getsource(sys.modules[m])) for m in [own.__name__, *used]]
+
+
 def topics_for(kind):
     """Topics with at least one statistic that makes sense for the scope kind."""
     return [t for t in TOPICS if any(kind in s.scopes for s in t.statistics)]

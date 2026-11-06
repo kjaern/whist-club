@@ -27,7 +27,7 @@ from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from ..stats.base import cell as stat_cell
 from ..stats.data import Scope, load
-from ..stats.registry import topic_tables, topics_for
+from ..stats.registry import rule_sources, statistic, topic_tables, topics_for
 from ..web import (
     can_manage_club,
     fmt,
@@ -210,6 +210,26 @@ def statistics_night(request: Request, sid: int, topic: str = ""):
         session = get_session(db, sid)
         return _statistics_page(request, db, Scope("night", session_id=sid), topic,
                                 session=session, night_date=night_time(session)[:10])
+
+
+@router.get("/statistics/rules/{key}", response_class=HTMLResponse)
+def show_statistic_rule(key: str):
+    """The code that computes one statistic, as Vis regler shows a bid's code."""
+    stat = statistic(key)
+    if stat is None:
+        raise HTTPException(404)
+    sources = "".join(
+        f"<h4>{escape(name)}</h4><pre><code>{escape(code)}</code></pre>" for name, code in rule_sources(stat)
+    )
+    return HTMLResponse(
+        '<section class="bid-rule-source">'
+        f"<h3>{escape(stat.title)} — beregningsregler</h3>"
+        f"<p>{escape(stat.description)}</p>"
+        "<p class=\"muted\">Statistikken bygger på klubaftenerne i perioden, indlæst én gang af "
+        "<code>stats/data.py</code>; den læser ikke selv databasen. Herunder koden, der beregner den.</p>"
+        f"{sources}"
+        "</section>"
+    )
 
 
 @router.get("/statistics/{year}/export.xlsx")

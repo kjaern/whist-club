@@ -105,7 +105,7 @@ def can_manage_club(request):
 
 # Ordinary members can view results, not mutate club data.
 def member_read_allowed(path):
-    if path in ("/statistics", "/account", "/") or re.fullmatch(r"/statistics/\d+(/export\.xlsx)?", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path):
+    if path in ("/statistics", "/account", "/") or re.fullmatch(r"/statistics/\d+(/export\.xlsx)?", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path) or re.fullmatch(r"/statistics/rules/[a-z_]+", path):
         return True
     return bool(re.fullmatch(r"/sessions/\d+/(live|live/scoreboard|export\.xlsx|history|statistics)", path))
 

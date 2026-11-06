@@ -21,6 +21,7 @@
         </h2>
         {% if section.title != 'Alle år' %}
           <a class="stats-night-link" href="/statistics/{{ section.title }}?origin={{ origin }}" aria-label="Se spilaftener for {{ section.title }}">{{ section.night_count }} spilaftener ↗</a>
+          <a class="stats-night-link" href="/statistics/{{ section.title }}/export.xlsx?origin={{ origin }}">Eksportér Excel</a>
         {% endif %}
       </div>
       <div style="overflow-x:auto">

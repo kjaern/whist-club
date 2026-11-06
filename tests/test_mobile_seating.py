@@ -32,4 +32,4 @@ def test_mobile_button_selector_and_cache_busting():
     base = (root / 'src/whistapp/templates/base.html').read_text(encoding='utf-8')
     assert '.setup-form #selected-seats button.seat-move' in css
     assert 'width:30px !important' in css
-    assert 'style.css?v=' in base
+    assert "static_url('style.css')" in base  # versioned by file time; see test_layout

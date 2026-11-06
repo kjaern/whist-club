@@ -128,10 +128,23 @@ def export_workbook(db, data):
 
     The original hand scores are retained; inferred values are never substituted
     for monetary records. Additional special bidders are placed at the far right.
+    A night with more than four players gets a column pair per player (0 while
+    sitting out); the importer only reads four-player sheets back.
     """
+    wb = Workbook()
+    sh = wb.active
+    sh.title = "Spilaften"
+    write_night_sheet(db, sh, data)
+    out = BytesIO()
+    wb.save(out)
+    return out.getvalue()
+
+
+def write_night_sheet(db, sh, data):
+    """Write one night's hands, score changes and running totals to a worksheet."""
     players = data["players"]
-    if len(players) != 4:
-        raise ValueError("Excel-håndeksport kræver præcis fire spillere")
+    if not players:
+        raise ValueError("Spilaftenen har ingen spillere")
 
     names = {p["id"]: p["name"] for p in players}
     rows = data["rows"]
@@ -142,9 +155,6 @@ def export_workbook(db, data):
         headers.extend([f"{p['name']} Δ", f"{p['name']} total"])
     headers.extend(f"Melder {n}" for n in range(2, extras + 2))
 
-    wb = Workbook()
-    sh = wb.active
-    sh.title = "Spilaften"
     sh.append(headers)
     totals = {p["id"]: Fraction(0) for p in players}
     display_bids = {
@@ -205,6 +215,14 @@ def export_workbook(db, data):
 
     # Keep the single-sheet import layout intact. The summary has no hand number,
     # so the importer safely ignores it on a later round trip.
+    # Nights imported with final scores only have no hand rows; their result is
+    # still part of the total.
+    for r in db.execute(
+        "SELECT player_id,numerator,denominator FROM historical_final_scores WHERE session_id=?",
+        (data["session"]["id"],),
+    ):
+        if r["player_id"] in totals:
+            totals[r["player_id"]] += Fraction(r["numerator"], r["denominator"])
     summary = [None, "Total", "", "", "", ""]
     for player in players:
         summary.extend([None, float(totals[player["id"]])])
@@ -223,6 +241,32 @@ def export_workbook(db, data):
             if isinstance(cell.value, (int, float)) and cell.column >= 7:
                 cell.number_format = "0.##"
 
+
+def export_year_workbook(db, year, nights):
+    """All of a year's club nights: an overview sheet, then one sheet per night.
+
+    `nights` is a list of (date text, view_data) in the order to show. The per-night
+    sheets use the single-night layout; the workbook is for reading, not re-import.
+    """
+    wb = Workbook()
+    overview = wb.active
+    overview.title = "Oversigt"
+    overview.append([f"Spilaftener {year}"])
+    overview.append(["Dato", "Spilaften", "Hænder", "Ark"])
+    for cell in [*overview[1], *overview[2]]:
+        cell.font = Font(bold=True)
+    used = {"oversigt"}
+    for date_text, data in nights:
+        base = f"{date_text} {data['session']['title']}".strip()
+        for bad in "[]:*?/\\":
+            base = base.replace(bad, "-")
+        title, n = base[:31], 2
+        while title.casefold() in used:
+            suffix = f" ({n})"
+            title, n = base[: 31 - len(suffix)] + suffix, n + 1
+        used.add(title.casefold())
+        write_night_sheet(db, wb.create_sheet(title), data)
+        overview.append([date_text, data["session"]["title"], len(data["rows"]), title])
     out = BytesIO()
     wb.save(out)
     return out.getvalue()

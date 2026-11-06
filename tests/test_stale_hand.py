@@ -52,6 +52,12 @@ def test_stale_new_hand_form_is_refused_and_refreshed():
             assert refused.status_code == 200
             assert "Hånden blev ikke gemt" in refused.text and _base(refused.text) == fresh
             assert _hand_count(sid) == 1
+            # The page moves the message out of the form into a timed banner fixed at the
+            # top of the screen, so on a phone it is seen and form refreshes cannot drop it.
+            assert 'id="hand-conflict" hidden' in refused.text
+            page = client.get(f"/sessions/{sid}").text
+            assert 'id="hand-toast"' in page and "getElementById('hand-conflict')" in page
+            assert 'id="hand-toast"' not in refused.text  # outside the swapped content
 
             # With the refreshed form it saves normally.
             assert client.post(f"/sessions/{sid}/hands", data=_hand(players, fresh, declarer=1)).status_code == 200

@@ -22,13 +22,14 @@ from ..auth import current_account, is_server_admin
 from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
-from ..finance import export_workbook, settlement_entries
+from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from ..statistics import club_statistics
 from ..web import (
     can_manage_club,
     fmt,
     get_session,
+    night_time,
     render,
     require_open,
     session_bid_settings,
@@ -151,14 +152,16 @@ def statistics(request: Request, origin: str = "all"):
     return render(request, "statistics.html", sections=sections, origin=origin)
 
 
-@router.get("/statistics/{year}", response_class=HTMLResponse)
-def statistics_year(request: Request, year: int, origin: str = "all"):
+def _check_year(year, origin):
     if year < 1900 or year > 9999:
         raise HTTPException(404)
     if origin not in ("all", "live", "imported"):
         raise HTTPException(400, "Invalid origin")
-    with connect() as db:
-        nights = db.execute(
+
+
+def _year_nights(db, year, origin):
+    """The active club's nights with results for club members in the year, newest first."""
+    return db.execute(
             """
             SELECT s.id, s.title, s.created_at, s.origin, COUNT(DISTINCT h.id) AS hand_count
             FROM sessions s
@@ -175,6 +178,13 @@ def statistics_year(request: Request, year: int, origin: str = "all"):
         """,
             (active_club_id(), str(year), origin, origin),
         ).fetchall()
+
+
+@router.get("/statistics/{year}", response_class=HTMLResponse)
+def statistics_year(request: Request, year: int, origin: str = "all"):
+    _check_year(year, origin)
+    with connect() as db:
+        nights = _year_nights(db, year, origin)
         roster = club_players(db)
 
         details = []
@@ -190,6 +200,26 @@ def statistics_year(request: Request, year: int, origin: str = "all"):
             )
     return render(
         request, "statistics_year.html", year=year, details=details, origin=origin
+    )
+
+
+@router.get("/statistics/{year}/export.xlsx")
+def export_year(year: int, origin: str = "all"):
+    _check_year(year, origin)
+    with connect() as db:
+        # Oldest night first, like a paper score book.
+        nights = [
+            (night_time(n)[:10], view_data(db, n["id"]))
+            for n in reversed(_year_nights(db, year, origin))
+        ]
+        try:
+            payload = export_year_workbook(db, year, nights)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+    return StreamingResponse(
+        BytesIO(payload),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="whist-{year}.xlsx"'},
     )
 
 
@@ -829,7 +859,10 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
 def export_session(sid: int):
     with connect() as db:
         data = view_data(db, sid)
-        payload = export_workbook(db, data)
+        try:
+            payload = export_workbook(db, data)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
     return StreamingResponse(
         BytesIO(payload),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

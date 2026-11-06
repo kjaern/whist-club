@@ -105,7 +105,7 @@ def can_manage_club(request):
 
 # Ordinary members can view results, not mutate club data.
 def member_read_allowed(path):
-    if path in ("/statistics", "/account", "/") or re.fullmatch(r"/statistics/\d+", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path):
+    if path in ("/statistics", "/account", "/") or re.fullmatch(r"/statistics/\d+(/export\.xlsx)?", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path):
         return True
     return bool(re.fullmatch(r"/sessions/\d+/(live|live/scoreboard|export\.xlsx|history)", path))
 
@@ -245,6 +245,18 @@ def night_time(session, field="created_at"):
 
 templates.env.filters["local_time"] = local_time
 templates.env.globals["night_time"] = night_time
+
+
+def static_url(name):
+    """Static file URL whose version follows the file, so phones never keep a stale copy."""
+    try:
+        version = int((ROOT / "static" / name).stat().st_mtime)
+    except OSError:
+        version = 0
+    return f"/static/{name}?v={version}"
+
+
+templates.env.globals["static_url"] = static_url
 
 
 # A linked player shows the member's current club name; players.name is only the

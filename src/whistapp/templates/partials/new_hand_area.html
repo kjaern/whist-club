@@ -11,7 +11,7 @@
     <form hx-post="/sessions/{{session.id}}/hands" hx-target="#session-content" id="new-hand-form">
       <input type="hidden" name="origin_client_id" class="origin-client-id">
       <input type="hidden" name="base_hand_id" value="{{ last_hand_id }}">
-      {% if hand_conflict %}<p role="alert" class="error">Hånden blev ikke gemt: der er gemt en anden hånd i mellemtiden. Formularen er opdateret; tjek melder og spillere, og gem igen.</p>{% endif %}
+      {% if hand_conflict %}<p id="hand-conflict" hidden>Hånden blev ikke gemt: der er gemt en anden hånd i mellemtiden. Formularen er opdateret; tjek melder og spillere, og gem igen.</p>{% endif %}
       <div class="hand-players">
         <div class="section-heading">
           <strong>Spillere denne hånd</strong><span class="muted">Vælg 4 · foreslået efter rotation · klik for at ændre</span>

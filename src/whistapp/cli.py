@@ -157,7 +157,10 @@ def main():
     else:
         import uvicorn
 
-        uvicorn.run("whistapp.main:app", host=args.host, port=args.port)
+        # Open live-update streams never end by themselves; without a limit, Ctrl+C
+        # (or docker stop) waits until every browser has left the night.
+        uvicorn.run("whistapp.main:app", host=args.host, port=args.port,
+                    timeout_graceful_shutdown=3)
 
 
 if __name__ == "__main__":

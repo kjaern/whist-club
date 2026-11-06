@@ -5,6 +5,7 @@
   </h1>
   <p>
     <a href="/statistics?origin={{ origin }}">← Tilbage til årsstatistik</a>
+    {% if details %} · <a href="/statistics/{{ year }}/export.xlsx?origin={{ origin }}">Eksportér året som Excel</a>{% endif %}
   </p>
   {% for detail in details %}
     <section class="card">

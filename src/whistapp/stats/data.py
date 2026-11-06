@@ -82,6 +82,11 @@ class StatsData:
     def member_name(self, mid, fallback=""):
         return self.names.get(str(mid), fallback)
 
+    def name_of(self, mid):
+        """The member's current name, else the name on one of their seats."""
+        fallback = next((p.name for p in self.players.values() if p.member_id == mid), "")
+        return self.member_name(mid, fallback)
+
     def for_year(self, year):
         year = str(year)
         return replace(self, hands=[h for h in self.hands if h.year == year],

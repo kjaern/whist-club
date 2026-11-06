@@ -4,11 +4,12 @@ Statistics never query the database themselves: they receive a StatsData and com
 from its hands and nights. Scores stay Fractions; formatting happens at display time.
 """
 
+import json
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
-from ..club import active_club_id, club_players
+from ..club import active_club_id, club_players, club_settings
 
 KINDS = ("all", "year", "night")
 ORIGINS = ("all", "live", "imported")
@@ -74,6 +75,7 @@ class StatsData:
     nights: dict  # id -> NightRecord, oldest first
     players: dict  # player id -> PlayerRecord (club members only)
     names: dict  # str(member id) -> current display name
+    bids: list = field(default_factory=list)  # (key, label) of every bid the club plays
 
     def member(self, pid):
         player = self.players.get(pid)
@@ -203,4 +205,22 @@ def load(db, scope, roster=None):
         night.member_names[r["member_id"]] = r["name"]
 
     return StatsData(scope=scope, hands=hands, nights=nights, players=players,
-                     names={str(k): v for k, v in roster})
+                     names={str(k): v for k, v in roster}, bids=_bid_catalogue(db, scope, hands))
+
+
+def _bid_catalogue(db, scope, hands):
+    """Every bid the club plays, so unplayed bids show with zero; a night uses its own
+    snapshot. Bids since disabled stay listed when they were played."""
+    from ..rules import enabled_bid_keys, load_rules
+    from .base import bid_rank
+
+    if scope.kind == "night":
+        row = db.execute("SELECT bid_settings FROM sessions WHERE id=?", (scope.session_id,)).fetchone()
+    else:
+        row = club_settings(db)
+    settings = json.loads(row["bid_settings"]) if row and row["bid_settings"] else {}
+    rules = load_rules(settings)["bids"]
+    labels = {k: rules[k]["label"] for k in enabled_bid_keys(settings)}
+    for h in hands:
+        labels.setdefault(h.bid_key, h.bid_label)
+    return sorted(labels.items(), key=lambda item: bid_rank(item[0]))

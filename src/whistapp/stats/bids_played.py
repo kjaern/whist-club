@@ -50,6 +50,13 @@ class BidsPlayed(Statistic):
                 if pid is not None:
                     g["points"] += h.scores.get(pid, Fraction())
                     g["scored"] += 1
+        # Every bid the club plays is listed, also when nobody has bid it yet.
+        played = {key[1] for key in groups}
+        for bid, label in data.bids:
+            if bid not in played:
+                key = (bid_rank(bid), bid, None)
+                names[key] = label
+                groups[key]
 
         def values(g, label, order):
             no_outcome = not g["scored"]

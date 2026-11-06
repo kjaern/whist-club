@@ -47,19 +47,29 @@ def test_meldinger_count_each_bid_and_attempt(tmp_path, monkeypatch):
         _seed(db)
         data = load(db, Scope())
     played = BidsPlayed().compute(data)
-    assert _texts(played) == [
-        dict(bid='9 Almindelige', count='2', won='1', lost='1', pct='50,0 %', points='-5', average='-2,5'),
-        # Each Sol bidder's own attempt counts, with that bidder's points.
-        dict(bid='Sol', count='2', won='1', lost='1', pct='50,0 %', points='0', average='0'),
-        # Påskrig has no bidder and no outcome: counted, never given a result.
-        dict(bid='Påskrig', count='1', won='—', lost='—', pct='—', points='—', average='—'),
-    ]
+    rows = {r['bid']: r for r in _texts(played)}
+    # Every bid the club plays is listed, in score-book order, also when nobody bid it.
+    assert list(rows) == ['9 Almindelige', 'Halve', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode',
+                          'Sol', 'Ren sol', 'Bordlægger', 'Påskrig']
+    assert rows['9 Almindelige'] == dict(bid='9 Almindelige', count='2', won='1', lost='1', pct='50,0 %',
+                                         points='-5', average='-2,5')
+    # Each Sol bidder's own attempt counts, with that bidder's points.
+    assert rows['Sol'] == dict(bid='Sol', count='2', won='1', lost='1', pct='50,0 %', points='0', average='0')
+    # Påskrig has no bidder and no outcome: counted, never given a result.
+    assert rows['Påskrig'] == dict(bid='Påskrig', count='1', won='—', lost='—', pct='—', points='—', average='—')
+    assert rows['Halve'] == dict(bid='Halve', count='0', won='—', lost='—', pct='—', points='—', average='—')
     assert cell(played.footer['count'], 'int')[0] == '5'
 
-    by_member = {r['name']: r for r in _texts(BidsByMember().compute(data))}
-    assert by_member['M1'] == {'name': 'M1', 'almindelige': '1 (100,0 %)', 'sol': '1 (100,0 %)',
-                               'total': '2', 'share': '50,0 %', 'pct': '100,0 %'}
-    assert by_member['M2']['almindelige'] == '1 (0,0 %)' and by_member['M2']['sol'] == ''
+    by_member_table = BidsByMember().compute(data)
+    # A column for every bid a member can make (not Påskrig, which has no bidder).
+    assert [c.label for c in by_member_table.columns] == [
+        'Spiller', 'Almindelige', 'Halve', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode', 'Sol', 'Ren sol',
+        'Bordlægger', 'I alt', 'Andel', 'Sejr %']
+    by_member = {r['name']: r for r in _texts(by_member_table)}
+    assert {k: by_member['M1'][k] for k in ('almindelige', 'sol', 'halve', 'total', 'share', 'pct')} == \
+        {'almindelige': '1 (100,0 %)', 'sol': '1 (100,0 %)', 'halve': '0', 'total': '2',
+         'share': '50,0 %', 'pct': '100,0 %'}
+    assert by_member['M2']['almindelige'] == '1 (0,0 %)' and by_member['M2']['sol'] == '0'
     assert by_member['M3']['sol'] == '1 (0,0 %)' and 'M4' not in by_member
 
     assert _texts(SpecialMulti().compute(data)) == [dict(size='2 meldere', hands='1')]
@@ -112,3 +122,19 @@ def test_statistics_pages_for_every_scope_and_topic(cleanup_clubs):  # noqa: F81
             db.execute("DELETE FROM sessions WHERE id=?", (sid,))
             db.execute("UPDATE club_members SET status='paused' WHERE name IN ('Statlæser')")
             db.executemany("DELETE FROM club_members WHERE id=?", [(m,) for m in members])
+
+
+def test_disabled_bids_are_left_out_unless_played(tmp_path, monkeypatch):
+    import json
+    import whistapp.database as database
+    monkeypatch.setattr(database, 'DB_PATH', tmp_path / 'test.sqlite3')
+    init_db()
+    with connect() as db:
+        _seed(db)
+        db.execute("UPDATE club_settings SET bid_settings=? WHERE id=1",
+                   (json.dumps({'halve': {'enabled': False}, 'almindelige': {'enabled': False}}),))
+        data = load(db, Scope())
+        night = load(db, Scope('night', session_id=1))  # the night's own snapshot: all bids
+    bids = [r['bid'] for r in _texts(BidsPlayed().compute(data))]
+    assert 'Halve' not in bids and '9 Almindelige' in bids
+    assert 'Halve' in [r['bid'] for r in _texts(BidsPlayed().compute(night))]

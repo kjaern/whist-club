@@ -32,6 +32,10 @@ class BidsByMember(Statistic):
             share = ratio(won, won + lost)
             return Cell(f"{n} ({pct_text(share)})" if share is not None else str(n), n)
 
+        # Every bid a member can make gets a column, also when nobody has bid it yet.
+        for bid, label in data.bids:
+            if bid != "paskrig":
+                labels.setdefault(bid, label)
         bids = sorted(labels, key=bid_rank)
         all_bids = sum(c[0] for per in counts.values() for c in per.values())
         rows = []
@@ -39,7 +43,7 @@ class BidsByMember(Statistic):
             n, won, lost = (sum(c[i] for c in per.values()) for i in range(3))
             row = dict(name=Cell(names[mid], names[mid].casefold()), total=n,
                        share=ratio(n, all_bids), pct=ratio(won, won + lost))
-            row.update({b: text(*per[b]) if b in per else Cell("", 0) for b in bids})
+            row.update({b: text(*per[b]) if b in per else Cell("0", 0) for b in bids})
             rows.append(row)
         columns = [Column("name", "Spiller", "Klubmedlemmet.", "text")]
         columns += [Column(b, labels[b], f"Antal {labels[b]}-meldinger (sejrsprocent).", "text") for b in bids]

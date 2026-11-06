@@ -10,8 +10,10 @@ from .club_rhythm import ClubRhythm
 from .extremes import Extremes
 from .streaks import Streaks
 from .member_specials import MemberSpecials
+from .night_grid import NightGrid
 from .overview import Overview
 from .partner_pairs import PartnerPairs
+from .placements import Placements
 from .self_partner import SelfPartner
 from .special_multi import SpecialMulti
 
@@ -20,6 +22,7 @@ TOPICS = [
     Topic("meldinger", "Meldinger", [BidsPlayed(), BidsByMember(), SpecialMulti()]),
     Topic("makkerpar", "Makkerpar", [PartnerPairs(), SelfPartner(), MemberSpecials()]),
     Topic("rekorder", "Rekorder", [Streaks(), Extremes(), ClubRhythm()]),
+    Topic("placeringer", "Placeringer", [Placements(), NightGrid()]),
 ]
 
 

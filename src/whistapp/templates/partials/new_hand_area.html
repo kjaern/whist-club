@@ -70,17 +70,17 @@
         >{{p.name}}</option>
       {% endfor %}
       </select></label>
-      <label>Melding<select name="bid_key" hx-get="/sessions/{{session.id}}/bid-fields" hx-trigger="change" hx-include="this" hx-target="#target-fields">
       {% set playable = enabled_bids|default(rules.bids.keys()|list) %}
+      <div id="target-fields">
+        {% set bid=rules.bids[playable|first] %}
+        {% include 'partials/target.html' %}
+      </div>
+      <label>Melding<select name="bid_key" hx-get="/sessions/{{session.id}}/bid-fields" hx-trigger="change" hx-include="this" hx-target="#target-fields">
       {% for key,bid in rules.bids.items() if key in playable and key not in ['vip2','vip3'] %}
         <option value="{{key}}">{{'VIP' if key=='vip1' else bid.label}}</option>
       {% endfor %}
       </select></label>
       <label id="vip-level-field" hidden>VIP niveau<select id="vip-level"><option value="vip1">1</option><option value="vip2">2</option><option value="vip3">3</option></select></label>
-      <div id="target-fields">
-        {% set bid=rules.bids[playable|first] %}
-        {% include 'partials/target.html' %}
-      </div>
     </div>
     <div class="result-entry">
       <h3>

@@ -17,7 +17,7 @@ main{max-width:1080px;width:100%;padding:clamp(12px,2.5vw,28px)}
 .section-heading h2{margin-bottom:0}.hand-entry form{gap:12px}.hand-players{display:grid;gap:9px}
 .selected-players{display:flex;flex-wrap:wrap;gap:6px}.player-pill{padding:5px 10px;border-radius:20px;background:#304a55;font-size:.85rem}
 .text-button{background:transparent;color:#72d7b4;border:0;padding:3px 5px;font-size:.85rem}
-.hand-fields{display:grid;grid-template-columns:minmax(110px,1fr) minmax(135px,1.3fr) minmax(100px,.7fr) auto;gap:10px;align-items:end}
+.hand-fields{display:grid;grid-template-columns:minmax(110px,1fr) minmax(100px,.7fr) minmax(135px,1.3fr) auto;gap:10px;align-items:end}
 .hand-fields label{font-size:.85rem}.hand-fields input,.hand-fields select,.hand-fields button{padding:8px 9px}
 .hand-fields .save-bid{white-space:nowrap}.hand-fields #target-fields{min-width:0}.hand-fields #target-fields .fixed{font-size:.8rem;padding:8px}
 .hand-fields #target-fields .choices{gap:3px}.hand-fields #target-fields .chip{padding:3px 5px;font-size:.8rem}

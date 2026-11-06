@@ -36,3 +36,9 @@ def test_stylesheet_version_follows_the_file():
     finally:
         os.utime(css, (stat.st_atime, stat.st_mtime))
     assert "static_url('style.css')" in (BASE / 'base.html').read_text(encoding='utf-8')
+
+
+def test_new_hand_asks_budte_stik_before_melding():
+    html = (BASE / 'partials' / 'new_hand_area.html').read_text(encoding='utf-8')
+    declarer, target, bid = html.index('name="declarer"'), html.index('id="target-fields"'), html.index('name="bid_key"')
+    assert declarer < target < bid < html.index('id="vip-level-field"')

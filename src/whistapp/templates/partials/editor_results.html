@@ -103,7 +103,10 @@
                     {% endfor %}
                   </select></label>
                   <label>Melding<select name="bid_key" class="edit-bid-key" onchange="whistEditBid(this)">
-                    {% for key,bid in rules.bids.items() if key in enabled_bids|default(rules.bids.keys()|list) or key == row.hand.bid_key %}
+                    {# The club's bid order, plus the hand's own bid if it has since been turned off. #}
+                    {% set edit_keys = enabled_bids|default(rules.bids.keys()|list) %}
+                    {% for key in edit_keys + ([] if row.hand.bid_key in edit_keys else [row.hand.bid_key]) %}
+                      {% set bid = rules.bids[key] %}
                       <option value="{{key}}" data-target="{{bid.target}}" {% if key==row.hand.bid_key %}selected{% endif %}>{{bid.label}}</option>
                     {% endfor %}
                   </select></label>

@@ -7,13 +7,6 @@ from fractions import Fraction
 PARTNERLESS = {"sol", "ren_sol", "bordlaegger", "paskrig"}
 # Bids with a fixed trick limit where every bidder makes their own attempt.
 SPECIAL = {"sol", "ren_sol", "bordlaegger"}
-# Display order, as in the club's old score book; unknown keys follow at the end.
-BID_ORDER = ["almindelige", "halve", "vip1", "vip2", "vip3", "sans", "gode",
-             "sol", "ren_sol", "bordlaegger", "paskrig"]
-
-
-def bid_rank(key):
-    return BID_ORDER.index(key) if key in BID_ORDER else len(BID_ORDER)
 
 
 def points_text(value):

@@ -12,7 +12,7 @@ from ..auth import is_server_admin
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import MONEY_MODES
-from ..rules import bid_classes
+from ..rules import bid_classes, bid_type_order
 from ..web import can_manage_club, fmt, render
 
 router = APIRouter()
@@ -64,11 +64,25 @@ def _club_page_context(request, db, form=None):
     }
 
 
+def _bid_order(saved, form=None):
+    """The bid types in the club's order: as posted on the club form (unknown and repeated
+    keys ignored, missing ones appended), else as saved."""
+    order = bid_type_order(saved)
+    if form is None or not form.get("bid_settings_form"):
+        return order
+    posted = []
+    for key in form.getlist("bid_order"):
+        if key in order and key not in posted:
+            posted.append(key)
+    return posted + [key for key in order if key not in posted]
+
+
 def _club_rules_context(settings, form=None):
-    """Money mode and per-bid on/off and values for the club page."""
+    """Money mode and per-bid on/off and values for the club page, in the club's bid order."""
     saved = json.loads(settings["bid_settings"] or "{}")
     rows = []
-    for bid in bid_classes():
+    classes = {bid.key: bid for bid in bid_classes()}
+    for bid in (classes[key] for key in _bid_order(saved, form)):
         chosen = saved.get(bid.key, {})
         values = bid.option_values(chosen.get("options"))
         enabled = chosen.get("enabled", True)
@@ -125,9 +139,11 @@ def _parse_club_rules(form, settings):
         point_rate = str(_club_amount(form.get("point_rate"), "Kr. pr. point"))
     bid_settings = json.loads(settings["bid_settings"] or "{}")
     if form.get("bid_settings_form"):
+        order = {key: i for i, key in enumerate(_bid_order(bid_settings, form))}
         bid_settings = {}
         for bid in bid_classes():
             bid_settings[bid.key] = {
+                "order": order[bid.key],
                 "enabled": bool(form.get(f"bid_enabled_{bid.key}")),
                 "options": {
                     name: str(_club_amount(form.get(f"bid_{bid.key}_{name}", fmt(Fraction(str(default)))),

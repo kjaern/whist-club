@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 
-from .base import Cell, Column, Statistic, Table, bid_rank, pct_text, ratio
+from .base import Cell, Column, Statistic, Table, pct_text, ratio
 from .bids_played import attempts
 
 
@@ -36,7 +36,7 @@ class BidsByMember(Statistic):
         for bid, label in data.bids:
             if bid != "paskrig":
                 labels.setdefault(bid, label)
-        bids = sorted(labels, key=bid_rank)
+        bids = sorted(labels, key=data.bid_rank)
         all_bids = sum(c[0] for per in counts.values() for c in per.values())
         rows = []
         for mid, per in sorted(counts.items(), key=lambda item: names[item[0]].casefold()):

@@ -306,12 +306,15 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 
 /* Club page: one aligned row per bid, a fixed name column and up to three values. */
 .bid-settings { display: grid; gap: .6rem; margin: .5rem 0 1rem; }
-.bid-setting { display: grid; grid-template-columns: 9.5rem repeat(3, minmax(0, 6.5rem)); gap: .6rem; align-items: end; }
+.bid-setting { display: grid; grid-template-columns: auto 9.5rem repeat(3, minmax(0, 6.5rem)); gap: .6rem; align-items: end; }
+.bid-setting .bid-move { display: flex; gap: 4px; padding-bottom: 6px; }
+.bid-setting .bid-move button { padding: 4px 8px; }
 .bid-setting label { font-weight: 600; font-size: .85rem; }
 .bid-setting input:not([type=checkbox]) { width: 100%; padding: 8px; }
 .bid-setting .bid-toggle { display: flex; align-items: center; gap: .45rem; font-size: 1rem; padding-bottom: 9px; }
-.bid-setting .bid-toggle input { width: 1.1rem; height: 1.1rem; accent-color: #4dc6a0; }
-@media (max-width: 500px) { .bid-setting { grid-template-columns: 1fr repeat(3, minmax(0, 4.5rem)); } }
+.bid-setting .bid-toggle input { width: 1.1rem; height: 1.1rem; accent-color: #4dc6a0; flex: none; }
+.bid-setting .bid-toggle { white-space: nowrap; }
+@media (max-width: 500px) { .bid-setting { grid-template-columns: auto 1fr repeat(3, minmax(0, 4.5rem)); } }
 
 /* Rules dialog: the club's configured values above the bid source. */
 .bid-rule-values { border-collapse: collapse; margin: .25rem 0 1rem; }

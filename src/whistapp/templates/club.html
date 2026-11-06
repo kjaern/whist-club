@@ -118,10 +118,16 @@
     <section class="card">
       <h2>Meldinger</h2>
       <p class="muted">Vælg hvilke meldinger klubben spiller, og deres værdier. Beregningen er den samme kode, som vises under “Vis regler”. Ændringer gælder for nye spilaftener.</p>
+      <p class="muted">Rækkefølgen er meldingernes indbyrdes rang, fra laveste til højeste. Den bruges i Ny hånd, Vis regler og statistikken. Flyt med ▲ og ▼.</p>
       <input type="hidden" name="bid_settings_form" value="1">
-      <div class="bid-settings">
+      <div class="bid-settings" id="bid-settings">
       {% for bid in bid_rows %}
         <div class="bid-setting">
+          <input type="hidden" name="bid_order" value="{{ bid.key }}">
+          <span class="bid-move">
+            <button type="button" class="secondary bid-up" aria-label="Flyt {{ bid.label }} op">▲</button>
+            <button type="button" class="secondary bid-down" aria-label="Flyt {{ bid.label }} ned">▼</button>
+          </span>
           <label class="bid-toggle"><input type="checkbox" name="bid_enabled_{{ bid.key }}" value="1" {% if bid.enabled %}checked{% endif %}> {{ bid.label }}</label>
           {% for option in bid.options %}
             <label>{{ option.label }}
@@ -131,6 +137,18 @@
         </div>
       {% endfor %}
       </div>
+      <script>
+      // Move a bid one place up or down; the hidden bid_order inputs follow the rows.
+      document.getElementById('bid-settings').addEventListener('click', event => {
+        const button = event.target.closest('.bid-up, .bid-down');
+        if (!button) return;
+        const row = button.closest('.bid-setting');
+        const other = button.classList.contains('bid-up') ? row.previousElementSibling : row.nextElementSibling;
+        if (!other) return;
+        if (button.classList.contains('bid-up')) other.before(row); else other.after(row);
+        button.focus();
+      });
+      </script>
       <p class="muted">Almindelige, Halve, Sans og Gode: pris = (meldte stik − 6) / 2 × grundpris. VIP: pris = (meldte stik − 6) / 2 + tillæg. Sol, Ren sol, Bordlægger og Paskrig: fast værdi.</p>
     </section>
     <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">

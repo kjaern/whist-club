@@ -75,7 +75,12 @@ class StatsData:
     nights: dict  # id -> NightRecord, oldest first
     players: dict  # player id -> PlayerRecord (club members only)
     names: dict  # str(member id) -> current display name
-    bids: list = field(default_factory=list)  # (key, label) of every bid the club plays
+    bids: list = field(default_factory=list)  # (key, label) of every bid the club plays, in its order
+    bid_order: list = field(default_factory=list)  # every bid key in the scope's order
+
+    def bid_rank(self, key):
+        """A bid's place in the club's order (the night's own for a night); unknown ones last."""
+        return self.bid_order.index(key) if key in self.bid_order else len(self.bid_order)
 
     def member(self, pid):
         player = self.players.get(pid)
@@ -205,14 +210,14 @@ def load(db, scope, roster=None):
         night.member_names[r["member_id"]] = r["name"]
 
     return StatsData(scope=scope, hands=hands, nights=nights, players=players,
-                     names={str(k): v for k, v in roster}, bids=_bid_catalogue(db, scope, hands))
+                     names={str(k): v for k, v in roster}, **_bid_catalogue(db, scope, hands))
 
 
 def _bid_catalogue(db, scope, hands):
-    """Every bid the club plays, so unplayed bids show with zero; a night uses its own
-    snapshot. Bids since disabled stay listed when they were played."""
-    from ..rules import enabled_bid_keys, load_rules
-    from .base import bid_rank
+    """Every bid the club plays, so unplayed bids show with zero, in the club's order; a
+    night uses its own snapshot. Bids since disabled stay listed, at their place in the
+    order, when they were played."""
+    from ..rules import enabled_bid_keys, load_rules, ordered_bid_keys
 
     if scope.kind == "night":
         row = db.execute("SELECT bid_settings FROM sessions WHERE id=?", (scope.session_id,)).fetchone()
@@ -223,4 +228,6 @@ def _bid_catalogue(db, scope, hands):
     labels = {k: rules[k]["label"] for k in enabled_bid_keys(settings)}
     for h in hands:
         labels.setdefault(h.bid_key, h.bid_label)
-    return sorted(labels.items(), key=lambda item: bid_rank(item[0]))
+    order = ordered_bid_keys(settings)
+    order += [key for key in labels if key not in order]
+    return dict(bids=sorted(labels.items(), key=lambda item: order.index(item[0])), bid_order=order)

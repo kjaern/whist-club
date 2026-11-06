@@ -150,12 +150,12 @@ def bid_rule_options():
     # Only the bids the active club plays.
     with connect() as db:
         settings = club_settings(db)
-    enabled = set(enabled_bid_keys(json.loads(settings["bid_settings"] or "{}") if settings else {}))
+    bids = registered_bids()
+    # In the club's bid order; VIP appears once.
+    for key in enabled_bid_keys(json.loads(settings["bid_settings"] or "{}") if settings else {}):
+        cls = type(bids[key])
 
-    for key, bid in registered_bids().items():
-        cls = type(bid)
-
-        if cls in seen or key not in enabled:
+        if cls in seen:
             continue
 
         seen.add(cls)

@@ -3,7 +3,7 @@
 from collections import defaultdict
 from fractions import Fraction
 
-from .base import SPECIAL, Cell, Column, Statistic, Table, bid_rank, ratio
+from .base import SPECIAL, Cell, Column, Statistic, Table, ratio
 
 FIELDS = ("count", "won", "lost", "points", "scored")
 
@@ -64,7 +64,7 @@ class BidsPlayed(Statistic):
                 _class=level,
             ))
 
-        bids = sorted(labels, key=bid_rank)
+        bids = sorted(labels, key=data.bid_rank)
         vip = [b for b in bids if b.startswith("vip")]
         for bid in bids:
             if bid in vip[1:]:

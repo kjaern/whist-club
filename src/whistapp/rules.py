@@ -37,10 +37,43 @@ def bid_classes():
     return list(unique.values())
 
 
-def enabled_bid_keys(bid_settings=None):
+# The club's bid types from lowest to highest when bidding, until a club sets its own
+# order on Klubadministration. This is also the old score book's order.
+DEFAULT_BID_ORDER = ["almindelige", "halve", "vip", "sans", "gode", "sol", "ren_sol",
+                     "bordlaegger", "paskrig"]
+
+
+def bid_type_order(bid_settings=None):
+    """Bid types (VIP once) in the club's order.
+
+    Types with a saved "order" come first, sorted by it. A type without one goes last:
+    one the club has never ordered, or a bid added to the app after the club saved its
+    order. That placement is provisional; it belongs with versioned club rules, which
+    should decide where a new bid enters a club's ranking.
+    """
     settings = bid_settings or {}
-    return [key for key, bid in registered_bids().items()
-            if settings.get(bid.key, {}).get("enabled", True)]
+    types = [bid.key for bid in bid_classes()]
+    default = {key: i for i, key in enumerate(DEFAULT_BID_ORDER)}
+    saved = sorted((t for t in types if isinstance(settings.get(t, {}).get("order"), int)),
+                   key=lambda t: settings[t]["order"])
+    rest = sorted((t for t in types if t not in saved), key=lambda t: (default.get(t, len(default)), types.index(t)))
+    return saved + rest
+
+
+def ordered_bid_keys(bid_settings=None):
+    """Every bid key in the club's order; VIP expands to its levels vip1-vip3."""
+    by_type = {}
+    for key, bid in registered_bids().items():
+        by_type.setdefault(bid.key, []).append(key)
+    return [key for t in bid_type_order(bid_settings) for key in by_type[t]]
+
+
+def enabled_bid_keys(bid_settings=None):
+    """The bids a club plays, in the club's order."""
+    settings = bid_settings or {}
+    bids = registered_bids()
+    return [key for key in ordered_bid_keys(settings)
+            if settings.get(bids[key].key, {}).get("enabled", True)]
 
 
 def rules_snapshot(bid):

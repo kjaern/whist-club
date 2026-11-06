@@ -1,9 +1,11 @@
-"""Meldinger: every bid played, per bid and number of tricks, with its outcome."""
+"""Meldinger: every bid the club plays, with how often it was bid and its outcome."""
 
 from collections import defaultdict
 from fractions import Fraction
 
 from .base import SPECIAL, Cell, Column, Statistic, Table, bid_rank, ratio
+
+FIELDS = ("count", "won", "lost", "points", "scored")
 
 
 def attempts(h):
@@ -19,27 +21,19 @@ def attempts(h):
     return [(h.declarer, h.won)]
 
 
-def bid_name(h):
-    if h.bid_key in SPECIAL or h.bid_key == "paskrig" or h.target is None:
-        return h.bid_label
-    return f"{h.target} {h.bid_label}"
-
-
 class BidsPlayed(Statistic):
     key = "meldinger"
     title = "Meldinger"
     topic = "meldinger"
-    description = ("Hver melding efter antal stik. Sol, Ren sol og Bordlægger tæller hver melders "
-                   "eget forsøg. Point er meldersidens ændring.")
+    description = ("Hver melding, med VIP fordelt på niveau. Sol, Ren sol og Bordlægger tæller hver "
+                   "melders eget forsøg. Point er meldersidens ændring.")
 
     def compute(self, data):
-        groups = defaultdict(lambda: dict(count=0, won=0, lost=0, points=Fraction(), scored=0))
-        names = {}
+        groups = defaultdict(lambda: dict.fromkeys(FIELDS, 0) | dict(points=Fraction()))
+        labels = dict(data.bids)  # every bid the club plays, also when nobody has bid it yet
         for h in data.hands:
-            special = h.bid_key in SPECIAL or h.bid_key == "paskrig"
-            key = (bid_rank(h.bid_key), h.bid_key, None if special else h.target)
-            names[key] = bid_name(h)
-            g = groups[key]
+            labels.setdefault(h.bid_key, h.bid_label)
+            g = groups[h.bid_key]
             if h.bid_key == "paskrig":
                 g["count"] += 1
                 continue
@@ -50,19 +44,12 @@ class BidsPlayed(Statistic):
                 if pid is not None:
                     g["points"] += h.scores.get(pid, Fraction())
                     g["scored"] += 1
-        # Every bid the club plays is listed, also when nobody has bid it yet.
-        labels = dict(data.bids)
-        for key in groups:
-            labels.setdefault(key[1], names[key].split(" ", 1)[-1])
-        by_bid = defaultdict(list)
-        for key in sorted(groups):
-            by_bid[key[1]].append(key)
 
-        def summed(keys):
-            total = dict(count=0, won=0, lost=0, points=Fraction(), scored=0)
-            for k in keys:
-                for field in total:
-                    total[field] += groups[k][field]
+        def summed(bids):
+            total = dict.fromkeys(FIELDS, 0) | dict(points=Fraction())
+            for bid in bids:
+                for field in FIELDS:
+                    total[field] += groups[bid][field] if bid in groups else 0
             return total
 
         rows = []
@@ -77,28 +64,20 @@ class BidsPlayed(Statistic):
                 _class=level,
             ))
 
-        def add_bid(bid, level=None):
-            """A bid's trick rows, or one row with zero when it has not been played."""
-            keys = by_bid[bid]
-            if not keys:
-                add(summed([]), labels[bid], level)
-            for k in keys:
-                add(groups[k], names[k], level)
-
-        vip = [b for b in sorted(labels, key=bid_rank) if b.startswith("vip")]
-        for bid in sorted(labels, key=bid_rank):
+        bids = sorted(labels, key=bid_rank)
+        vip = [b for b in bids if b.startswith("vip")]
+        for bid in bids:
             if bid in vip[1:]:
                 continue
             if bid in vip:
-                # VIP is one bid; its level (1-3) is an input, so its levels and tricks follow it.
-                add(summed([k for b in vip for k in by_bid[b]]), "VIP", "group")
+                # VIP is one bid; its level (1-3) is an input, so each level follows it.
+                add(summed(vip), "VIP", "group")
                 for level in vip:
-                    add_bid(level, "sub1")
+                    add(summed([level]), labels[level], "sub1")
             else:
-                add_bid(bid)
-        total = summed(list(groups))
+                add(summed([bid]), labels[bid])
         columns = [
-            Column("bid", "Melding", "Meldingen og antal budte stik.", "text"),
+            Column("bid", "Melding", "Meldingen.", "text"),
             Column("count", "Antal", "Antal gange meldingen er spillet; Sol m.fl. tæller hver melder."),
             Column("won", "Vundet", "Antal vundne meldinger."),
             Column("lost", "Tabt", "Antal tabte meldinger."),
@@ -106,8 +85,6 @@ class BidsPlayed(Statistic):
             Column("points", "Point i alt", "Summen af melderens pointændring.", "points"),
             Column("average", "Gennemsnit", "Melderens gennemsnitlige pointændring pr. melding.", "points"),
         ]
-        footer = None
-        if rows:
-            add(total, "I alt")
-            footer = rows.pop()
+        add(summed(list(groups)), "I alt")
+        footer = rows.pop()
         return Table(columns, rows, footer=footer, empty="Ingen meldinger i perioden.")

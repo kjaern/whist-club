@@ -18,6 +18,7 @@
     {% if can_manage_club(request) %}<a href="/club">Klubadministration</a>{% endif %}
     {% if request.session.get("user") == "admin" %}<a href="/admin/accounts">Serveradministration</a>{% endif %}
     <a href="/account">Min konto</a>
+    <a href="/guide">Vejledning</a>
     <button type="button" class="secondary" id="show-bid-rules" aria-haspopup="dialog">Vis regler</button>
     <form method="post" action="/logout" class="logout-form">
       <button type="submit" class="secondary">Log ud</button>

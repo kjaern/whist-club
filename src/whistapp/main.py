@@ -22,7 +22,7 @@ from .web import (
     resolve_active_club,
     ROOT,
 )
-from .routes import accounts, admin_ai, clubs, sessions, club, imports
+from .routes import accounts, admin_ai, clubs, guide, sessions, club, imports
 
 
 @asynccontextmanager
@@ -55,7 +55,7 @@ async def require_authentication(request: Request, call_next):
 
 
 # Pages usable before a club is chosen: account upkeep and the club picker.
-CLUBLESS_PATHS = ("/account", "/account/password", "/logout", "/clubs", "/clubs/select", "/clubs/new")
+CLUBLESS_PATHS = ("/account", "/account/password", "/logout", "/clubs", "/clubs/select", "/clubs/new", "/guide")
 
 
 async def _authorized_request(request, call_next, path):
@@ -102,6 +102,7 @@ app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 app.include_router(accounts.router)
 app.include_router(admin_ai.router)
 app.include_router(clubs.router)
+app.include_router(guide.router)
 app.include_router(sessions.router)
 app.include_router(club.router)
 app.include_router(imports.router)

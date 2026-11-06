@@ -1,0 +1,73 @@
+{% extends 'base.html' %}{% block content %}
+<h1>Vejledning</h1>
+<p class="muted">Hvem kan hvad, og hvor finder man de funktioner, der ikke ligger lige for.</p>
+
+<section class="card">
+  <h2>Medlemmer</h2>
+  <p>Alle med et login, der er knyttet til et aktivt medlem i klubben, kan:</p>
+  <ul>
+    <li><strong>Oprette en spilaften</strong> på forsiden: tryk på spillerne for at sætte dem ved bordet, og ret rækkefølgen med pilene (telefon) eller ved at trække i ☰ (computer). Med gæster holdes aftenen uden for klubstatistik og klubkasse.</li>
+    <li><strong>Føre en spilaften</strong> under <em>Spiladministration</em>: tilføje hænder, rette eller slette en hånd med <em>Ret</em> i hændernes tabel, tilføje spillere undervejs, ændre bordrækkefølgen (<em>Ændr bordrækkefølge</em>), markere en spiller som gået ved at trykke på <em>Aktiv</em> ved navnet og registrere Fejl40.</li>
+    <li><strong>Afslutte og genåbne</strong> en spilaften. En afsluttet aften er låst; <em>Genåbn til rettelse</em> låser den op igen, og betalingen beregnes forfra, når den afsluttes igen.</li>
+    <li><strong>Følge med live</strong>: livevisningen opdaterer sig selv, så den kan stå fremme på en skærm ved bordet.</li>
+    <li><strong>Importere en spilaften</strong> fra Excel{% if ai_import_allowed() %} eller fotos af regnskabsarket (AI-import){% endif %} via <a href="/import">Importer spilaften</a>.</li>
+    <li><strong>Se statistik og ændringshistorik</strong>, og eksportere en aften eller et år som Excel.</li>
+    <li><strong>Skifte sin adgangskode</strong> under <a href="/account">Min konto</a>.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Statistik</h2>
+  <ul>
+    <li><strong>Sortér en tabel</strong> ved at trykke på en kolonneoverskrift. Tryk igen for at vende rækkefølgen. Totalrækken bliver nederst.</li>
+    <li><strong>ⓘ</strong> ved en kolonne forklarer, hvad tallet betyder.</li>
+    <li><strong>Vis regel</strong> ved en tabel viser præcis den kode, der beregner den.</li>
+    <li>Fanerne øverst skifter emne. Vælg et årstal for kun at se det år, eller en enkelt aften under året.</li>
+    <li><em>Spilaftener: Alle / Live / Importerede</em> begrænser statistikken til aftener ført live eller importerede.</li>
+    <li>Kun klubaftener tæller med; aftener med gæster er uden for statistikken.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Klubber</h2>
+  <ul>
+    <li><strong>Skift klub</strong> ved at trykke på klubbens navn øverst på siden. Er du kun med i én klub, vælges den automatisk.</li>
+    <li><strong>Opret en ny klub</strong>: tryk på klubbens navn øverst og brug <em>Opret ny klub</em> nederst på siden. Det kan alle aktive medlemmer af den første klub. Du bliver selv klubadministrator i den nye klub, og den har sine egne medlemmer, satser og statistik.{% if can_create %} <a href="/clubs">Gå til klubvælgeren →</a>{% endif %}</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Klubadministratorer</h2>
+  <p>Kan alt, hvad medlemmer kan, og desuden under <a href="/club">Klubadministration</a>:</p>
+  <ul>
+    <li>Omdøbe klubben.</li>
+    <li>Tilføje medlemmer, rette navne og aliasnavne (bruges ved import), og sætte medlemmer inaktive. Et medlem kan spille uden login.</li>
+    <li>Oprette login til et medlem. Det giver en midlertidig adgangskode, som medlemmet skifter ved første login. <em>Nulstil invitation</em> giver en ny, hvis den er glemt.</li>
+    <li>Gøre andre til klubadministrator eller fjerne rollen.</li>
+    <li>Vælge betalingsform (pladsbetaling eller kr. pr. point), satser og Fejl40.</li>
+    <li>Vælge hvilke meldinger klubben spiller, deres værdier og deres rækkefølge (▲▼).</li>
+    <li>Slette en spilaften fra forsiden, rette betalingen på importerede aftener og fjerne uploadede originalark.</li>
+  </ul>
+  <p class="muted">Ændringer af satser og meldinger gælder kun nye spilaftener; eksisterende aftener beholder deres regler.</p>
+</section>
+
+<section class="card">
+  <h2>Serveradministrator</h2>
+  <p>Kan alt i alle klubber og desuden under <em>Serveradministration</em>:</p>
+  <ul>
+    <li>Oprette konti og nulstille adgangskoder.</li>
+    <li>Knytte en eksisterende konto til et medlem i en klub.</li>
+    <li>Opsætte AI-fotoimport: udbyder, grænser, hvilke klubber der må bruge den, og klubbens AI-noter.</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Små ting, der er nemme at overse</h2>
+  <ul>
+    <li><strong>Vis regler</strong> øverst viser reglerne for hver melding, som klubben spiller.</li>
+    <li><strong>Ændringshistorik</strong> på en spilaften viser, hvem der har ændret hvad.</li>
+    {% if ai_import_allowed() %}<li><strong>Aktuelle importer</strong> øverst viser AI-importer, der stadig er i gang eller venter på gennemsyn.</li>{% endif %}
+  </ul>
+</section>
+<a href="/">← Spilaftener</a>
+{% endblock %}

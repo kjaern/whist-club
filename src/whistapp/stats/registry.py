@@ -6,6 +6,9 @@ To add a statistic: write a Statistic subclass in its own file and list it here.
 from .base import Topic
 from .bids_by_member import BidsByMember
 from .bids_played import BidsPlayed
+from .club_rhythm import ClubRhythm
+from .extremes import Extremes
+from .streaks import Streaks
 from .member_specials import MemberSpecials
 from .overview import Overview
 from .partner_pairs import PartnerPairs
@@ -16,6 +19,7 @@ TOPICS = [
     Topic("overblik", "Overblik", [Overview()]),
     Topic("meldinger", "Meldinger", [BidsPlayed(), BidsByMember(), SpecialMulti()]),
     Topic("makkerpar", "Makkerpar", [PartnerPairs(), SelfPartner(), MemberSpecials()]),
+    Topic("rekorder", "Rekorder", [Streaks(), Extremes(), ClubRhythm()]),
 ]
 
 

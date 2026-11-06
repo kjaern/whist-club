@@ -99,7 +99,8 @@ def test_statistics_pages_for_every_scope_and_topic(cleanup_clubs):  # noqa: F81
             admin.post('/login', data={'username': 'admin', 'password': 'a$$word'})
             for url in ('/statistics', '/statistics/1997', f'/sessions/{sid}/statistics'):
                 for topic, expected in (('overblik', 'Mulige selvmakker'), ('meldinger', 'Flere meldere på samme hånd'),
-                                        ('makkerpar', 'Statmedlem0 + Statmedlem1')):
+                                        ('makkerpar', 'Statmedlem0 + Statmedlem1'),
+                                        ('rekorder', 'Vinderrække')):
                     page = admin.get(f'{url}?topic={topic}')
                     assert page.status_code == 200, (url, topic)
                     assert expected in page.text and 'Statmedlem0' in page.text, (url, topic)

@@ -255,6 +255,23 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 
 .stats-night-link { white-space: nowrap; }
 
+/* Statistics: scope links, topic tabs, and tables that scroll with a fixed first column. */
+.stats-scope { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin: 0 0 12px; }
+.stats-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
+.stats-tabs a { background: #2b414b; color: #eaf0f4; text-decoration: none; font-weight: 700; padding: 8px 12px; border-radius: 8px; }
+.stats-tabs a.active { background: #3a9a7c; color: #fff; }
+.stat-scroll { overflow-x: auto; }
+.stat-table { border-collapse: separate; border-spacing: 0; }
+.stat-table th, .stat-table td { white-space: nowrap; border-width: 0 1px 1px 0; }
+.stat-table tr > :first-child { border-left-width: 1px; }
+.stat-table thead th { border-top-width: 1px; }
+.stat-table th:first-child, .stat-table td:first-child { position: sticky; left: 0; background: #1c2c35; z-index: 1; }
+.stat-table tfoot td { font-weight: 700; border-top: 2px solid #566a75; }
+.stat-sort { appearance: none; background: none; border: 0; color: inherit; font: inherit; font-weight: 700; padding: 0; cursor: pointer; }
+.stat-table th[aria-sort="ascending"] .stat-sort::after { content: " ▲"; }
+.stat-table th[aria-sort="descending"] .stat-sort::after { content: " ▼"; }
+.stats-heading-button.stat-info { margin-left: 4px; opacity: .7; font-weight: 400; }
+
 .stats-heading-button {
   appearance: none;
   border: 0;

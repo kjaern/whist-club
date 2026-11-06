@@ -21,6 +21,7 @@
 - Club identity is `club_members.id` via `players.member_id`; `players.club_id` is legacy migration data. Runtime members and rates live in `club_members`/`club_settings` and are edited via `/club`; `config/club.ini` only seeds initial data, so editing it does not rename existing members.
 - Auth middleware protects everything except `/login`, `/logout`, and `/static`. SSE returns 401 instead of redirecting. Mutating non-GET requests also require same-origin. Do not weaken these checks.
 - Historical import treats recorded per-hand score deltas as authoritative; never invent bids or tricks. The importer expects one worksheet. See `docs/historical-import.md`.
+- Statistics live in `src/whistapp/stats/`: `data.load(db, Scope)` loads the club's lifetime, a year or a night once; each statistic is a `Statistic` in its own file returning a `Table`, listed under a topic tab in `stats/registry.py`, and `partials/stat_table.html` renders every table on `/statistics`, `/statistics/{year}` and `/sessions/{sid}/statistics`. Statistics never query the database. `statistics.club_statistics()` is a compatibility wrapper over the Overblik rows.
 
 ## Conventions and gotchas
 - `config/`, `data/`, and `.env` are gitignored and may contain secrets or real data. Never commit them or copy `secrets.ini`.

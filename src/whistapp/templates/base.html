@@ -52,7 +52,7 @@
   document.addEventListener('click', event => {
     const button = event.target.closest('.stats-heading-button');
     if (!button) return;
-    document.getElementById('stat-info-title').textContent = button.textContent.trim();
+    document.getElementById('stat-info-title').textContent = button.dataset.statTitle || button.textContent.trim();
     document.getElementById('stat-info-description').textContent = button.dataset.statDescription;
     statDialog.showModal();
   });

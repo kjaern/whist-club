@@ -1,50 +1,83 @@
 {% extends 'base.html' %}
 {% block content %}
-  <h1>
-    Klubstatistik
-  </h1>
-  <p>
-    Kun klubspilaftener med registrerede hænder. Beløb er beregnede resultater, ikke registrerede betalinger.
-  </p>
-  <form method="get" action="/statistics">
-    <label>Spilaftener <select name="origin" onchange="this.form.submit()">
-      <option value="all" {{ 'selected' if origin == 'all' else '' }}>Alle</option>
-      <option value="live" {{ 'selected' if origin == 'live' else '' }}>Live</option>
-      <option value="imported" {{ 'selected' if origin == 'imported' else '' }}>Importerede</option>
-    </select></label>
-  </form>
-  {% for section in sections %}
-    <section class="card">
-      <div class="stats-section-heading">
-        <h2>
-          {{ section.title }}
-        </h2>
-        {% if section.title != 'Alle år' %}
-          <a class="stats-night-link" href="/statistics/{{ section.title }}?origin={{ origin }}" aria-label="Se spilaftener for {{ section.title }}">{{ section.night_count }} spilaftener ↗</a>
-          <a class="stats-night-link" href="/statistics/{{ section.title }}/export.xlsx?origin={{ origin }}">Eksportér Excel</a>
-        {% endif %}
-      </div>
-      <div style="overflow-x:auto">
-        <table class="night">
-          <thead>
-            <tr>
-              {% include "partials/statistics_headers.html" %}
-            </tr>
-          </thead>
-          <tbody>
-            {% for p in section.players %}
-              <tr>
-                {% include "partials/statistics_cells.html" %}
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </section>
+  {% if scope.kind == 'night' %}
+    {% set base_url = '/sessions/' ~ session.id ~ '/statistics' %}
+    {% set query = '' %}
   {% else %}
-    <p>
-      Ingen klubhænder registreret endnu.
-    </p>
+    {% set base_url = '/statistics' if scope.kind == 'all' else '/statistics/' ~ scope.year %}
+    {% set query = 'origin=' ~ origin ~ '&' %}
+  {% endif %}
+  <h1>
+    {% if scope.kind == 'all' %}Klubstatistik{% elif scope.kind == 'year' %}Klubstatistik · {{ scope.year }}{% else %}Statistik · {{ night_date }} · {{ session.title }}{% endif %}
+  </h1>
+  <nav class="stats-scope">
+    {% if scope.kind == 'all' %}
+      {% for year, count in years %}
+        <a href="/statistics/{{ year }}?origin={{ origin }}&topic={{ topic.key }}">{{ year }}</a><span class="muted">{{ count }} aftener</span>
+      {% endfor %}
+    {% elif scope.kind == 'year' %}
+      <a href="/statistics?origin={{ origin }}&topic={{ topic.key }}">← Alle år</a>
+      {% if nights %}<a href="/statistics/{{ scope.year }}/export.xlsx?origin={{ origin }}">Eksportér året som Excel</a>{% endif %}
+    {% else %}
+      <a href="/statistics/{{ session.created_at[:4] }}?topic={{ topic.key }}">← {{ session.created_at[:4] }}</a>
+      <a href="/sessions/{{ session.id }}/live">Se spilaften ↗</a>
+    {% endif %}
+  </nav>
+  {% if scope.kind != 'night' %}
+    <form method="get" action="{{ base_url }}">
+      <input type="hidden" name="topic" value="{{ topic.key }}">
+      <label>Spilaftener <select name="origin" onchange="this.form.submit()">
+        <option value="all" {{ 'selected' if origin == 'all' else '' }}>Alle</option>
+        <option value="live" {{ 'selected' if origin == 'live' else '' }}>Live</option>
+        <option value="imported" {{ 'selected' if origin == 'imported' else '' }}>Importerede</option>
+      </select></label>
+    </form>
+  {% elif not session.is_club %}
+    <p class="muted">Kun klubspilaftener indgår i statistikken; denne aften er ikke en klubaften.</p>
+  {% endif %}
+  <nav class="stats-tabs" aria-label="Emner">
+    {% for t in topics %}
+      <a href="{{ base_url }}?{{ query }}topic={{ t.key }}" {% if t.key == topic.key %}class="active" aria-current="page"{% endif %}>{{ t.label }}</a>
+    {% endfor %}
+  </nav>
+  {% for stat, table in tables %}
+    <section class="card">
+      <h2>{{ stat.title }}</h2>
+      {% if stat.description %}<p class="muted">{{ stat.description }}</p>{% endif %}
+      {% include 'partials/stat_table.html' %}
+    </section>
   {% endfor %}
+  {% if scope.kind == 'year' %}
+    <section class="card">
+      <h2>Spilaftener i {{ scope.year }}</h2>
+      {% for night in nights %}
+        <p><a href="/sessions/{{ night.id }}/statistics?topic={{ topic.key }}">{{ night.date }} · {{ night.title }}</a> <span class="muted">· {{ night.hand_count }} hænder</span></p>
+      {% else %}
+        <p>Ingen klubspilaftener med registrerede hænder i {{ scope.year }}.</p>
+      {% endfor %}
+    </section>
+  {% endif %}
   <a href="/">← Spilaftener</a>
+  <script>
+  // Tap a column heading to sort; tap again to reverse. The totals row stays at the bottom.
+  document.addEventListener('click', event => {
+    const button = event.target.closest('.stat-sort');
+    if (!button) return;
+    const th = button.closest('th'), table = th.closest('table'), body = table.tBodies[0];
+    const index = [...th.parentNode.children].indexOf(th);
+    const descending = th.dataset.dir !== 'desc';
+    table.querySelectorAll('th').forEach(h => { delete h.dataset.dir; h.removeAttribute('aria-sort'); });
+    th.dataset.dir = descending ? 'desc' : 'asc';
+    th.setAttribute('aria-sort', descending ? 'descending' : 'ascending');
+    const key = row => row.children[index].dataset.sort;
+    const numeric = [...body.rows].every(row => key(row) === '' || !isNaN(key(row)));
+    const rows = [...body.rows].sort((a, b) => {
+      const x = key(a), y = key(b);
+      if (x === '' || y === '') return (x === '') - (y === '');  // blanks last
+      const order = numeric ? x - y : x.localeCompare(y, 'da');
+      return descending ? -order : order;
+    });
+    body.append(...rows);
+  });
+  </script>
 {% endblock %}

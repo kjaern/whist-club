@@ -7,6 +7,7 @@ import json
 import logging
 import shutil
 import sqlite3
+from collections import Counter
 
 from datetime import date
 from fractions import Fraction
@@ -24,7 +25,9 @@ from ..buildinfo import build_stamp
 from ..database import connect
 from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
-from ..statistics import club_statistics
+from ..stats.base import cell as stat_cell
+from ..stats.data import Scope, load
+from ..stats.registry import topic_tables, topics_for
 from ..web import (
     can_manage_club,
     fmt,
@@ -143,13 +146,25 @@ def delete_session(request: Request, sid: int):
     return RedirectResponse("/", status_code=303)
 
 
+def _statistics_page(request, db, scope, topic, **context):
+    """One page for every scope: topic tabs over the registered statistics."""
+    data = load(db, scope)
+    topics = topics_for(scope.kind)
+    current = next((t for t in topics if t.key == topic), topics[0])
+    return render(request, "statistics.html", scope=scope, topics=topics, topic=current,
+                  tables=topic_tables(current, data), origin=scope.origin, stat_cell=stat_cell,
+                  **context)
+
+
 @router.get("/statistics", response_class=HTMLResponse)
-def statistics(request: Request, origin: str = "all"):
+def statistics(request: Request, origin: str = "all", topic: str = ""):
     if origin not in ("all", "live", "imported"):
         raise HTTPException(400, "Invalid origin")
     with connect() as db:
-        sections = club_statistics(db, club_players(db), origin=origin)
-    return render(request, "statistics.html", sections=sections, origin=origin)
+        nights = load(db, Scope(origin=origin)).nights_with_members()
+        years = Counter(n.year for n in nights)
+        return _statistics_page(request, db, Scope(origin=origin), topic,
+                                years=sorted(years.items(), reverse=True))
 
 
 def _check_year(year, origin):
@@ -181,26 +196,20 @@ def _year_nights(db, year, origin):
 
 
 @router.get("/statistics/{year}", response_class=HTMLResponse)
-def statistics_year(request: Request, year: int, origin: str = "all"):
+def statistics_year(request: Request, year: int, origin: str = "all", topic: str = ""):
     _check_year(year, origin)
     with connect() as db:
-        nights = _year_nights(db, year, origin)
-        roster = club_players(db)
+        nights = [dict(n, date=night_time(n)[:10]) for n in _year_nights(db, year, origin)]
+        return _statistics_page(request, db, Scope("year", year=year, origin=origin), topic,
+                                nights=nights)
 
-        details = []
-        for night in nights:
-            sections = club_statistics(
-                db, roster, session_id=night["id"], origin=origin
-            )
-            details.append(
-                dict(
-                    night=dict(night),
-                    players=sections[0]["players"] if sections else [],
-                )
-            )
-    return render(
-        request, "statistics_year.html", year=year, details=details, origin=origin
-    )
+
+@router.get("/sessions/{sid}/statistics", response_class=HTMLResponse)
+def statistics_night(request: Request, sid: int, topic: str = ""):
+    with connect() as db:
+        session = get_session(db, sid)
+        return _statistics_page(request, db, Scope("night", session_id=sid), topic,
+                                session=session, night_date=night_time(session)[:10])
 
 
 @router.get("/statistics/{year}/export.xlsx")

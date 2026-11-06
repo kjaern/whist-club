@@ -1,0 +1,34 @@
+{% if table.rows %}
+  <div class="stat-scroll">
+    <table class="night stat-table">
+      <thead>
+        <tr>
+          {% for c in table.columns %}
+            <th scope="col"><button type="button" class="stat-sort">{{ c.label }}</button>{% if c.description %}<button type="button" class="stats-heading-button stat-info" data-stat-title="{{ c.label }}" data-stat-description="{{ c.description }}" aria-haspopup="dialog" aria-label="Forklaring: {{ c.label }}">ⓘ</button>{% endif %}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table.rows %}
+          <tr>
+            {% for c in table.columns %}
+              {% set text, sort = stat_cell(row[c.key], c.fmt) %}
+              <td data-sort="{{ sort }}">{{ text }}</td>
+            {% endfor %}
+          </tr>
+        {% endfor %}
+      </tbody>
+      {% if table.footer %}
+        <tfoot>
+          <tr>
+            {% for c in table.columns %}
+              <td>{{ stat_cell(table.footer[c.key], c.fmt)[0] }}</td>
+            {% endfor %}
+          </tr>
+        </tfoot>
+      {% endif %}
+    </table>
+  </div>
+{% else %}
+  <p>{{ table.empty }}</p>
+{% endif %}

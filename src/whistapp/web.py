@@ -107,7 +107,7 @@ def can_manage_club(request):
 def member_read_allowed(path):
     if path in ("/statistics", "/account", "/") or re.fullmatch(r"/statistics/\d+(/export\.xlsx)?", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path):
         return True
-    return bool(re.fullmatch(r"/sessions/\d+/(live|live/scoreboard|export\.xlsx|history)", path))
+    return bool(re.fullmatch(r"/sessions/\d+/(live|live/scoreboard|export\.xlsx|history|statistics)", path))
 
 
 def ai_import_allowed():

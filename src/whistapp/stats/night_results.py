@@ -22,6 +22,17 @@ def night_totals(data):
     return {sid: totals[sid] for sid in data.nights if sid in totals}
 
 
+def place_score(place, players):
+    """A night's place as a share from 0 (alone last) to 1 (alone first), at any table size.
+
+    One match per other player: ahead = 1, behind = 0, equal result = a draw worth ½.
+    With `place` the midpoint place from places(), that share is (n - place) / (n - 1):
+    two tied for first of five get (3 + ½) / 4 = 7/8, the average of 1st and 2nd.
+    None when the member played alone.
+    """
+    return (players - place) / Fraction(players - 1) if players > 1 else None
+
+
 def places(totals):
     """member id -> (label, place) ranked by total, highest first.
 

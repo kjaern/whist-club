@@ -4,7 +4,7 @@ from fractions import Fraction
 from whistapp.database import connect, init_db
 from whistapp.stats.data import Scope, load
 from whistapp.stats.night_grid import NightGrid
-from whistapp.stats.night_results import places
+from whistapp.stats.night_results import place_score, places
 from whistapp.stats.placements import Placements
 from test_stats_meldinger import _seed, _texts
 
@@ -31,13 +31,28 @@ def test_shared_places():
         {'a': '1', 'b': '2/3/4', 'c': '2/3/4', 'd': '2/3/4'}
 
 
+def test_place_score_is_fair_across_table_sizes():
+    # One match per other player: ahead = 1, behind = 0, equal = ½.
+    assert place_score(1, 4) == 1 and place_score(4, 4) == 0 and place_score(6, 6) == 0
+    two_first_of_five = places({'a': 9, 'b': 9, 'c': 5, 'd': 2, 'e': 0})
+    # Two tied first get 7/8 (midway between 1st and 2nd); the next is 3rd: beat two, lost to two.
+    assert [place_score(two_first_of_five[k][1], 5) for k in 'abc'] == [Fraction(7, 8), Fraction(7, 8), Fraction(1, 2)]
+    assert place_score(2, 5) == Fraction(3, 4)  # alone in 2nd
+    assert place_score(1, 1) is None
+
+
 def test_placements(tmp_path, monkeypatch):
-    # Seed night totals: M1 +15, M4 -2, M3 -6, M2 -7. The import night ties M3 and M4 at 2/3.
-    rows = {r['name']: r for r in _texts(Placements().compute(_load(tmp_path, monkeypatch, (1, 2026), final_only=True)))}
-    assert rows['M1'] == {'name': 'M1', 'nights': '2', 'p1': '1', 'p2': '0', 'p2/3': '0', 'p3': '0', 'p4': '1', 'average': '2,5'}
-    assert (rows['M2']['p1'], rows['M2']['p4'], rows['M2']['average']) == ('1', '1', '2,5')
-    assert (rows['M3']['p3'], rows['M3']['p2/3'], rows['M3']['average']) == ('1', '1', '2,75')
-    assert (rows['M4']['p2'], rows['M4']['p2/3'], rows['M4']['average']) == ('1', '1', '2,25')
+    # Seed night totals: M1 +15, M4 -2, M3 -6, M2 -7. The import night: M2 first, M3/M4 tied 2/3, M1 last.
+    table = Placements().compute(_load(tmp_path, monkeypatch, (1, 2026), final_only=True))
+    assert [c.label for c in table.columns] == [
+        'Spiller', 'Aftener', 'Placeringsscore', 'Snit plads', 'Nr. 1', 'Nr. 2', 'Nr. 2/3', 'Nr. 3', 'Nr. 4']
+    rows = _texts(table)
+    # Best score first: M4 (2/3 and ½), then M1 and M2 (50 % each, same average place), then M3.
+    assert [(r['name'], r['score'], r['average']) for r in rows] == [
+        ('M4', '58,3 %', '2,25'), ('M1', '50,0 %', '2,5'), ('M2', '50,0 %', '2,5'), ('M3', '41,7 %', '2,75')]
+    m1 = rows[1]
+    assert (m1['nights'], m1['p1'], m1['p4'], m1['p2/3']) == ('2', '1', '1', '0')
+    assert (rows[3]['p3'], rows[3]['p2/3']) == ('1', '1')
 
 
 def test_year_grid(tmp_path, monkeypatch):

@@ -44,9 +44,15 @@ class BidsByMember(Statistic):
             row = dict(name=Cell(names[mid], names[mid].casefold()), total=n,
                        share=ratio(n, all_bids), pct=ratio(won, won + lost))
             row.update({b: text(*per[b]) if b in per else Cell("0", 0) for b in bids})
+            vip = [per[b] for b in bids if b.startswith("vip") and b in per]
+            row["vip"] = text(*(sum(c[i] for c in vip) for i in range(3))) if vip else Cell("0", 0)
             rows.append(row)
         columns = [Column("name", "Spiller", "Klubmedlemmet.", "text")]
-        columns += [Column(b, labels[b], f"Antal {labels[b]}-meldinger (sejrsprocent).", "text") for b in bids]
+        for b in bids:
+            if b == next((x for x in bids if x.startswith("vip")), None):
+                # VIP is one bid; the levels follow its total.
+                columns.append(Column("vip", "VIP", "Antal VIP-meldinger på alle niveauer (sejrsprocent).", "text"))
+            columns.append(Column(b, labels[b], f"Antal {labels[b]}-meldinger (sejrsprocent).", "text"))
         columns += [
             Column("total", "I alt", "Antal meldinger i alt."),
             Column("share", "Andel", "Medlemmets andel af alle klubmedlemmers meldinger.", "pct"),

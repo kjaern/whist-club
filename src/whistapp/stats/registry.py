@@ -9,12 +9,13 @@ from .bids_played import BidsPlayed
 from .member_specials import MemberSpecials
 from .overview import Overview
 from .partner_pairs import PartnerPairs
+from .self_partner import SelfPartner
 from .special_multi import SpecialMulti
 
 TOPICS = [
     Topic("overblik", "Overblik", [Overview()]),
     Topic("meldinger", "Meldinger", [BidsPlayed(), BidsByMember(), SpecialMulti()]),
-    Topic("makkerpar", "Makkerpar", [PartnerPairs(), MemberSpecials()]),
+    Topic("makkerpar", "Makkerpar", [PartnerPairs(), SelfPartner(), MemberSpecials()]),
 ]
 
 

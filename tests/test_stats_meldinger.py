@@ -49,7 +49,7 @@ def test_meldinger_count_each_bid_and_attempt(tmp_path, monkeypatch):
     played = BidsPlayed().compute(data)
     rows = {r['bid']: r for r in _texts(played)}
     # Every bid the club plays is listed, in score-book order, also when nobody bid it.
-    assert list(rows) == ['9 Almindelige', 'Halve', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode',
+    assert list(rows) == ['9 Almindelige', 'Halve', 'VIP', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode',
                           'Sol', 'Ren sol', 'Bordlægger', 'Påskrig']
     assert rows['9 Almindelige'] == dict(bid='9 Almindelige', count='2', won='1', lost='1', pct='50,0 %',
                                          points='-5', average='-2,5')
@@ -63,7 +63,7 @@ def test_meldinger_count_each_bid_and_attempt(tmp_path, monkeypatch):
     by_member_table = BidsByMember().compute(data)
     # A column for every bid a member can make (not Påskrig, which has no bidder).
     assert [c.label for c in by_member_table.columns] == [
-        'Spiller', 'Almindelige', 'Halve', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode', 'Sol', 'Ren sol',
+        'Spiller', 'Almindelige', 'Halve', 'VIP', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode', 'Sol', 'Ren sol',
         'Bordlægger', 'I alt', 'Andel', 'Sejr %']
     by_member = {r['name']: r for r in _texts(by_member_table)}
     assert {k: by_member['M1'][k] for k in ('almindelige', 'sol', 'halve', 'total', 'share', 'pct')} == \
@@ -138,3 +138,29 @@ def test_disabled_bids_are_left_out_unless_played(tmp_path, monkeypatch):
     bids = [r['bid'] for r in _texts(BidsPlayed().compute(data))]
     assert 'Halve' not in bids and '9 Almindelige' in bids
     assert 'Halve' in [r['bid'] for r in _texts(BidsPlayed().compute(night))]
+
+
+def test_vip_levels_are_grouped_under_vip(tmp_path, monkeypatch):
+    import whistapp.database as database
+    monkeypatch.setattr(database, 'DB_PATH', tmp_path / 'test.sqlite3')
+    init_db()
+    with connect() as db:
+        p = _seed(db)
+        for key, label, target, won, score in (('vip1', 'VIP1', 9, 1, 5), ('vip2', 'VIP2', 9, 0, -6),
+                                               ('vip2', 'VIP2', 10, 1, 8)):
+            hid = db.execute("""INSERT INTO hands(session_id,bid_key,bid_label,target,won,rules_snapshot,partner_id)
+                VALUES(1,?,?,?,?,'{}',?)""", (key, label, target, won, p[1])).lastrowid
+            db.execute("INSERT INTO hand_declarers VALUES(?,?)", (hid, p[0]))
+            db.executemany("INSERT INTO hand_participants VALUES(?,?)", [(hid, x) for x in p])
+            db.executemany("INSERT INTO hand_scores VALUES(?,?,?,1)", [(hid, x, s) for x, s in zip(p, [score, score, -score, -score])])
+        data = load(db, Scope())
+    table = BidsPlayed().compute(data)
+    rows = [(r['bid'].text, r['_class'], cell(r['count'], 'int')[0], cell(r['points'], 'points')[0]) for r in table.rows]
+    vip = rows[rows.index(('VIP', 'group', '3', '7')):][:7]
+    # VIP is the bid; each level (an input) follows with its own trick rows.
+    assert vip == [('VIP', 'group', '3', '7'),
+                   ('VIP1', 'sub1', '1', '5'), ('9 VIP1', 'sub2', '1', '5'),
+                   ('VIP2', 'sub1', '2', '2'), ('9 VIP2', 'sub2', '1', '-6'), ('10 VIP2', 'sub2', '1', '8'),
+                   ('VIP3', 'sub1', '0', '—')]
+    m1 = {r['name']: r for r in _texts(BidsByMember().compute(data))}['M1']
+    assert (m1['vip'], m1['vip1'], m1['vip2'], m1['vip3']) == ('3 (66,7 %)', '1 (100,0 %)', '2 (50,0 %)', '0')

@@ -3,6 +3,7 @@ from whistapp.database import connect, init_db
 from whistapp.stats.data import Scope, load
 from whistapp.stats.member_specials import MemberSpecials
 from whistapp.stats.partner_pairs import PartnerPairs, ranks
+from whistapp.stats.self_partner import SelfPartner
 from test_stats_meldinger import _seed, _texts
 
 
@@ -37,11 +38,19 @@ def test_ties_share_a_place():
     assert [r.get("rank") for r in rows] == [2, 1, 2, None, 4]
 
 
-def test_members_alone(tmp_path, monkeypatch):
+def test_alone_counts_only_sol_type_bids(tmp_path, monkeypatch):
     rows = {r['name']: r for r in _texts(MemberSpecials().compute(_data(tmp_path, monkeypatch)))}
-    assert {k: rows['M1'][k] for k in ('self_count', 'self_points', 'sol_count', 'sol_won', 'sol_pct', 'sol_average')} == \
-        dict(self_count='0', self_points='—', sol_count='1', sol_won='1', sol_pct='100,0 %', sol_average='6')
-    assert {k: rows['M2'][k] for k in ('self_count', 'self_lost', 'self_pct', 'self_points', 'sol_count')} == \
-        dict(self_count='1', self_lost='1', self_pct='0,0 %', self_points='-9', sol_count='0')
-    assert (rows['M3']['sol_lost'], rows['M3']['sol_points']) == ('1', '-6')
-    assert (rows['M4']['fejl40'], rows['M4']['fejl40_kr'], rows['M4']['self_count']) == ('1', '40', '0')
+    # Fejl40 is not a bid, and selvmakker has its own table: only M1 and M3 bid Sol.
+    assert rows == {
+        'M1': dict(name='M1', count='1', won='1', lost='0', pct='100,0 %', points='6', average='6'),
+        'M3': dict(name='M3', count='1', won='0', lost='1', pct='0,0 %', points='-6', average='-6'),
+    }
+
+
+def test_self_partner_against_the_bids_that_allowed_it(tmp_path, monkeypatch):
+    rows = {r['name']: r for r in _texts(SelfPartner().compute(_data(tmp_path, monkeypatch)))}
+    # M1, M2 and M3 each declared one ordinary bid; only M2 chose themself, and lost.
+    assert rows['M2'] == dict(name='M2', eligible='1', count='1', won='0', lost='1', pct='0,0 %',
+                              points='-9', average='-9', share='100,0 %')
+    assert (rows['M1']['eligible'], rows['M1']['count'], rows['M1']['share'], rows['M1']['points']) == ('1', '0', '0,0 %', '—')
+    assert rows['M3']['eligible'] == '1' and 'M4' not in rows

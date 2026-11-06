@@ -267,6 +267,10 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .stat-table thead th { border-top-width: 1px; }
 .stat-table th:first-child, .stat-table td:first-child { position: sticky; left: 0; background: #1c2c35; z-index: 1; }
 .stat-table tfoot td { font-weight: 700; border-top: 2px solid #566a75; }
+/* Grouped rows (VIP and its levels): the group in bold, its parts indented under it. */
+.stat-table tr.group td { font-weight: 700; }
+.stat-table tr.sub1 td:first-child { padding-left: 1.4em; }
+.stat-table tr.sub2 td:first-child { padding-left: 2.6em; color: #aabcc5; }
 .stat-sort { appearance: none; background: none; border: 0; color: inherit; font: inherit; font-weight: 700; padding: 0; cursor: pointer; }
 .stat-table th[aria-sort="ascending"] .stat-sort::after { content: " ▲"; }
 .stat-table th[aria-sort="descending"] .stat-sort::after { content: " ▼"; }

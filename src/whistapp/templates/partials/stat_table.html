@@ -10,7 +10,7 @@
       </thead>
       <tbody>
         {% for row in table.rows %}
-          <tr>
+          <tr{% if row.get('_class') %} class="{{ row.get('_class') }}"{% endif %}>
             {% for c in table.columns %}
               {% set text, sort = stat_cell(row[c.key], c.fmt) %}
               <td data-sort="{{ sort }}">{{ text }}</td>

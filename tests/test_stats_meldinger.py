@@ -156,11 +156,9 @@ def test_vip_levels_are_grouped_under_vip(tmp_path, monkeypatch):
         data = load(db, Scope())
     table = BidsPlayed().compute(data)
     rows = [(r['bid'].text, r['_class'], cell(r['count'], 'int')[0], cell(r['points'], 'points')[0]) for r in table.rows]
-    vip = rows[rows.index(('VIP', 'group', '3', '7')):][:7]
-    # VIP is the bid; each level (an input) follows with its own trick rows.
-    assert vip == [('VIP', 'group', '3', '7'),
-                   ('VIP1', 'sub1', '1', '5'), ('9 VIP1', 'sub2', '1', '5'),
-                   ('VIP2', 'sub1', '2', '2'), ('9 VIP2', 'sub2', '1', '-6'), ('10 VIP2', 'sub2', '1', '8'),
-                   ('VIP3', 'sub1', '0', '—')]
+    vip = rows[rows.index(('VIP', 'group', '3', '7')):][:5]
+    # VIP is the bid; under it each level (an input) by tricks, once, as in Hvem melder hvad.
+    assert vip == [('VIP', 'group', '3', '7'), ('9 VIP1', 'sub1', '1', '5'),
+                   ('9 VIP2', 'sub1', '1', '-6'), ('10 VIP2', 'sub1', '1', '8'), ('VIP3', 'sub1', '0', '—')]
     m1 = {r['name']: r for r in _texts(BidsByMember().compute(data))}['M1']
     assert (m1['vip'], m1['vip1'], m1['vip2'], m1['vip3']) == ('3 (66,7 %)', '1 (100,0 %)', '2 (50,0 %)', '0')

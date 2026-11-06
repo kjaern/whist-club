@@ -77,25 +77,23 @@ class BidsPlayed(Statistic):
                 _class=level,
             ))
 
-        def add_bid(bid, level=None, sub=None):
+        def add_bid(bid, level=None):
             """A bid's trick rows, or one row with zero when it has not been played."""
             keys = by_bid[bid]
             if not keys:
                 add(summed([]), labels[bid], level)
             for k in keys:
-                add(groups[k], names[k], sub if sub else level)
+                add(groups[k], names[k], level)
 
         vip = [b for b in sorted(labels, key=bid_rank) if b.startswith("vip")]
         for bid in sorted(labels, key=bid_rank):
             if bid in vip[1:]:
                 continue
             if bid in vip:
-                # VIP is one bid; its level (1-3) is an input, so each level is shown under it.
+                # VIP is one bid; its level (1-3) is an input, so its levels and tricks follow it.
                 add(summed([k for b in vip for k in by_bid[b]]), "VIP", "group")
                 for level in vip:
-                    if by_bid[level]:
-                        add(summed(by_bid[level]), labels[level], "sub1")
-                    add_bid(level, "sub1", "sub2")
+                    add_bid(level, "sub1")
             else:
                 add_bid(bid)
         total = summed(list(groups))

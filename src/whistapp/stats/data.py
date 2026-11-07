@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
 from ..club import active_club_id, club_players, club_settings
+from ..rule_versions import night_rules
 
 KINDS = ("all", "year", "night")
 ORIGINS = ("all", "live", "imported")
@@ -226,10 +227,10 @@ def _bid_catalogue(db, scope, hands):
     from ..rules import enabled_bid_keys, load_rules, ordered_bid_keys
 
     if scope.kind == "night":
-        row = db.execute("SELECT bid_settings FROM sessions WHERE id=?", (scope.session_id,)).fetchone()
+        settings = night_rules(db, scope.session_id)["bid_settings"]
     else:
         row = club_settings(db)
-    settings = json.loads(row["bid_settings"]) if row and row["bid_settings"] else {}
+        settings = json.loads(row["bid_settings"]) if row and row["bid_settings"] else {}
     rules = load_rules(settings)["bids"]
     labels = {k: rules[k]["label"] for k in enabled_bid_keys(settings)}
     for h in hands:

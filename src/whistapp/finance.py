@@ -7,6 +7,7 @@ from io import BytesIO
 from openpyxl import Workbook
 from openpyxl.styles import Font
 
+from .rule_versions import night_rules
 from .settings import CONFIG
 
 
@@ -29,20 +30,16 @@ def placement_amounts():
 
 
 def settlement_rows(db, sid, amounts):
-    """Rank every active club member, including absentees with zero points."""
-    members = db.execute(
-        """SELECT id FROM club_members WHERE status='active'
-        AND club_id=(SELECT club_id FROM sessions WHERE id=?) ORDER BY id""",
-        (sid,),
-    ).fetchall()
+    """Rank every member on the night's medlemsliste, including absentees with zero points."""
+    members = night_rules(db, sid)["member_ids"]
     if len(members) != len(amounts):
         raise ValueError(
-            f"Club payment table supports {len(amounts)} active members, not {len(members)}"
+            f"Club payment table supports {len(amounts)} members, not {len(members)}"
         )
     if not members:
-        raise ValueError("No active club members")
+        raise ValueError("No club members on the night's medlemsliste")
 
-    totals = _member_totals(db, sid, [m["id"] for m in members])
+    totals = _member_totals(db, sid, members)
     ranked = sorted(totals, key=lambda mid: (-totals[mid], mid))
     result = []
     i = 0

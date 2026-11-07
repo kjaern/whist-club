@@ -17,6 +17,7 @@ from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
 from .finance import MONEY_MODES
+from .rule_versions import night_rules
 from .rules import bid_short_names, enabled_bid_keys, load_rules
 from .vision_import import admin_llm_settings
 
@@ -192,13 +193,13 @@ def get_session(db, sid):
     return session
 
 
-def session_bid_settings(session):
-    # Nights started before bid settings existed use the original house rules.
-    return json.loads(session["bid_settings"]) if session["bid_settings"] else {}
+def session_bid_settings(db, session):
+    """The bid settings of the rule version the night is played under."""
+    return night_rules(db, session["id"])["bid_settings"]
 
 
 def session_rules(db, sid):
-    return load_rules(session_bid_settings(get_session(db, sid)))["bids"]
+    return load_rules(session_bid_settings(db, get_session(db, sid)))["bids"]
 
 
 def require_open(db, sid):
@@ -438,7 +439,8 @@ def view_data(db, sid):
         )
         for r in settled
     ]
-    money_mode = session["money_mode"] or "placement"
+    night = night_rules(db, sid)
+    money_mode = night["money_mode"]
 
     return dict(
         session=session,
@@ -455,8 +457,8 @@ def view_data(db, sid):
             "SELECT bid_settings FROM club_settings WHERE id=?", (session["club_id"],)).fetchone() or ["{}"])[0] or "{}")),
         # The new-hand form remembers which hand it was built after, to refuse stale saves.
         last_hand_id=hands[-1]["id"] if hands else 0,
-        rules=load_rules(session_bid_settings(session)),
-        enabled_bids=enabled_bid_keys(session_bid_settings(session)),
+        rules=load_rules(night["bid_settings"]),
+        enabled_bids=enabled_bid_keys(night["bid_settings"]),
         money_mode=money_mode,
         money_mode_label=MONEY_MODES.get(money_mode, money_mode),
         penalties=penalties,
@@ -481,7 +483,5 @@ def view_data(db, sid):
             )
             + sum(x["amount"] for x in penalties)
         ),
-        fee=session["fejl40_rate"]
-        if session["fejl40_rate"] is not None
-        else club_settings(db)["fejl40"],
+        fee=night["fejl40"],
     )

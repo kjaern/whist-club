@@ -18,7 +18,7 @@ from openpyxl import load_workbook
 from .bids.registry import get_bid
 from .buildinfo import build_stamp
 from .club import active_club_id
-from .rule_versions import stamp_night
+from .rule_versions import is_club_night, stamp_night
 from .rules import load_rules, rules_snapshot, target_for
 
 MAX_BYTES = 2_000_000
@@ -873,6 +873,7 @@ def save_import(db, data, title, created_at, member_mapping, replace_id=None):
             "INSERT INTO players(session_id,name,seat_order,member_id) VALUES (?,?,?,?)",
             (sid, name, i, member_mapping.get(name)),
         ).lastrowid
+    db.execute("UPDATE sessions SET is_club=? WHERE id=?", (int(is_club_night(db, sid)), sid))
 
     rules = load_rules()["bids"]
     for hand in data["hands"]:

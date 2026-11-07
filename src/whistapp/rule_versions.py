@@ -96,6 +96,41 @@ def _settled_members(db, sid):
         "SELECT member_id FROM club_member_settlements WHERE session_id=? ORDER BY member_id", (sid,))]
 
 
+def _settled_rosters(db, club_id):
+    """(night id, medlemsliste) for the club's nights that were settled by placement."""
+    nights = db.execute(
+        "SELECT id FROM sessions WHERE club_id=? AND COALESCE(money_mode,'placement')='placement'", (club_id,))
+    return [(sid, m) for (sid,) in nights.fetchall() if (m := _settled_members(db, sid))]
+
+
+def _assign(db, session, known, rosters):
+    """Give one night without a version the version its own snapshot describes."""
+    club_id = session["club_id"]
+    settings = db.execute("SELECT * FROM club_settings WHERE id=?", (club_id,)).fetchone()
+    if settings is None:
+        return None
+    values = _night_values(session, settings)
+    members = [] if values["money_mode"] != "placement" else _settled_members(db, session["id"])
+    if not members:
+        size = len(json.loads(values["placements"]))
+        played = {r[0] for r in db.execute(
+            "SELECT member_id FROM players WHERE session_id=? AND member_id IS NOT NULL", (session["id"],))}
+        candidates = sorted(rosters, key=lambda c: abs(c[0] - session["id"]))
+        members = next((m for _, m in candidates if len(m) == size and played <= set(m)), None)             or active_member_ids(db, club_id)
+    key = _key(values, members)
+    if key not in known:
+        known[key] = _insert(db, club_id, values, members, MIGRATION_ACTOR, session["created_at"])
+    db.execute("UPDATE sessions SET rule_version_id=? WHERE id=?", (known[key], session["id"]))
+    return known[key]
+
+
+def _known_versions(db, club_id):
+    known = {}
+    for row in db.execute("SELECT * FROM club_rule_versions WHERE club_id=? ORDER BY number", (club_id,)):
+        known.setdefault(_version_key(row), row["id"])
+    return known
+
+
 def migrate(db):
     """Give every night without a version one, then make sure each club has a current version.
 
@@ -108,34 +143,37 @@ def migrate(db):
     """
     sessions = db.execute(
         "SELECT * FROM sessions WHERE rule_version_id IS NULL ORDER BY created_at, id").fetchall()
-    known = {}  # (club_id, key) -> version id
-    for row in db.execute("SELECT * FROM club_rule_versions"):
-        known.setdefault((row["club_id"], _version_key(row)), row["id"])
-
-    settled = {}
-    for (sid, club_id, mode) in db.execute("SELECT id,club_id,COALESCE(money_mode,'placement') FROM sessions"):
-        members = _settled_members(db, sid) if mode == "placement" else []
-        if members:
-            settled.setdefault(club_id, []).append((sid, members))
-
+    known, rosters = {}, {}
     for session in sessions:
         club_id = session["club_id"]
-        settings = db.execute("SELECT * FROM club_settings WHERE id=?", (club_id,)).fetchone()
-        if settings is None:
-            continue
-        values = _night_values(session, settings)
-        members = [] if values["money_mode"] != "placement" else _settled_members(db, session["id"])
-        if not members:
-            size = len(json.loads(values["placements"]))
-            played = {r[0] for r in db.execute(
-                "SELECT member_id FROM players WHERE session_id=? AND member_id IS NOT NULL", (session["id"],))}
-            candidates = sorted(settled.get(club_id, []), key=lambda c: abs(c[0] - session["id"]))
-            members = next((m for _, m in candidates if len(m) == size and played <= set(m)), None) \
-                or active_member_ids(db, club_id)
-        key = (club_id, _key(values, members))
-        if key not in known:
-            known[key] = _insert(db, club_id, values, members, MIGRATION_ACTOR, session["created_at"])
-        db.execute("UPDATE sessions SET rule_version_id=? WHERE id=?", (known[key], session["id"]))
+        if club_id not in known:
+            known[club_id], rosters[club_id] = _known_versions(db, club_id), _settled_rosters(db, club_id)
+        _assign(db, session, known[club_id], rosters[club_id])
 
     for (club_id,) in db.execute("SELECT id FROM club_settings").fetchall():
         current_version_id(db, club_id, MIGRATION_ACTOR)
+
+
+def night_version(db, sid):
+    """The version a night is played under. A night made without one gets it as migration would."""
+    session = db.execute("SELECT * FROM sessions WHERE id=?", (sid,)).fetchone()
+    if session is None:
+        raise ValueError("Ukendt spilaften")
+    version_id = session["rule_version_id"] or _assign(
+        db, session, _known_versions(db, session["club_id"]), _settled_rosters(db, session["club_id"]))
+    return get_version(db, version_id)
+
+
+def night_rules(db, sid):
+    """A night's rules as values: placements, fejl40, money_mode, point_rate, bid_settings, member_ids."""
+    v = night_version(db, sid)
+    return dict(id=v["id"], number=v["number"], placements=json.loads(v["placements"]), fejl40=v["fejl40"],
+                money_mode=v["money_mode"], point_rate=v["point_rate"],
+                bid_settings=json.loads(v["bid_settings"] or "{}"), member_ids=json.loads(v["member_ids"]))
+
+
+def is_club_night(db, sid):
+    """Only members on the night's medlemsliste played; a guest or anyone else makes it a non-club night."""
+    players = db.execute("SELECT member_id FROM players WHERE session_id=?", (sid,)).fetchall()
+    on_list = set(night_rules(db, sid)["member_ids"])
+    return bool(players) and all(p["member_id"] in on_list for p in players)

@@ -22,7 +22,7 @@ from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import settlement_entries
-from ..rule_versions import stamp_night
+from ..rule_versions import is_club_night, night_rules, stamp_night
 from ..historical_import import (
     decimal_text,
     field_issues,
@@ -101,15 +101,14 @@ def _set_import_money(db, sid, enabled):
     db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
 
     if enabled:
-        if not session["is_club"]:
-            raise ValueError("Alle fire spillere skal være klubmedlemmer")
+        if not session["is_club"] or not is_club_night(db, sid):
+            raise ValueError("Alle fire spillere skal være klubmedlemmer på aftenens medlemsliste")
 
-        # Imported nights have no snapshot; use the club's current money mode and record it.
-        settings = club_settings(db)
+        # The night's rule version decides the money; the snapshot columns are kept in step.
+        night = night_rules(db, sid)
         db.execute("UPDATE sessions SET money_mode=?,point_rate=? WHERE id=?",
-                   (settings["money_mode"], settings["point_rate"], sid))
-        entries = settlement_entries(db, sid, settings["money_mode"],
-                                     json.loads(settings["placements"]), settings["point_rate"])
+                   (night["money_mode"], night["point_rate"], sid))
+        entries = settlement_entries(db, sid, night["money_mode"], night["placements"], night["point_rate"])
         db.executemany(
             """INSERT INTO club_member_settlements
             (session_id,member_id,place,amount_numerator,amount_denominator)
@@ -1624,6 +1623,7 @@ async def import_final(request: Request):
                 (sid, pid, score.numerator, score.denominator),
             )
 
+        db.execute("UPDATE sessions SET is_club=? WHERE id=?", (int(is_club_night(db, sid)), sid))
         _set_import_money(db, sid, bool(form.get("collect_club_money")))
     return RedirectResponse(f"/sessions/{sid}/live", status_code=303)
 

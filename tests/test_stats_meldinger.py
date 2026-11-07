@@ -132,6 +132,8 @@ def test_disabled_bids_are_left_out_unless_played(tmp_path, monkeypatch):
     init_db()
     with connect() as db:
         _seed(db)
+        from whistapp.rule_versions import migrate
+        migrate(db)  # the night was played under the rules before the change
         db.execute("UPDATE club_settings SET bid_settings=? WHERE id=1",
                    (json.dumps({'halve': {'enabled': False}, 'almindelige': {'enabled': False}}),))
         data = load(db, Scope())

@@ -65,6 +65,15 @@ def _night(db, scores, money_mode="placement"):
         members.append(mid)
         players.append(db.execute("INSERT INTO players(session_id,name,member_id,seat_order) VALUES (?,?,?,?)",
                                   (sid, f"P{i}", mid, i)).lastrowid)
+    # The members are paused so the shared club keeps its roster, so the night gets its own
+    # rule version with them on its medlemsliste (otherwise it would be a non-club night).
+    rules = db.execute("SELECT placements,fejl40,bid_settings FROM club_settings WHERE id=1").fetchone()
+    version = db.execute("""INSERT INTO club_rule_versions(club_id,number,created_by,placements,fejl40,
+        money_mode,point_rate,bid_settings,member_ids)
+        VALUES (1,(SELECT MAX(number)+1 FROM club_rule_versions WHERE club_id=1),'test',?,?,?,'1',?,?)""",
+                         (json.dumps(list(range(len(scores)))), rules["fejl40"], money_mode,
+                          rules["bid_settings"], json.dumps(members))).lastrowid
+    db.execute("UPDATE sessions SET rule_version_id=? WHERE id=?", (version, sid))
     hid = db.execute("""INSERT INTO hands(session_id,bid_key,bid_label,target,rules_snapshot)
                         VALUES (?,'almindelige','Almindelige',8,'{}')""", (sid,)).lastrowid
     for pid, score in zip(players, scores):
@@ -75,7 +84,9 @@ def _night(db, scores, money_mode="placement"):
 
 def _cleanup(sid, members):
     with connect() as db:
+        version = db.execute("SELECT rule_version_id FROM sessions WHERE id=?", (sid,)).fetchone()[0]
         db.execute("DELETE FROM sessions WHERE id=?", (sid,))
+        db.execute("DELETE FROM club_rule_versions WHERE id=?", (version,))
         db.executemany("DELETE FROM club_members WHERE id=?", [(m,) for m in members])
 
 

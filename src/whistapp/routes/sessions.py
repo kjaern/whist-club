@@ -24,7 +24,7 @@ from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
 from ..finance import export_workbook, export_year_workbook, settlement_entries
-from ..rule_versions import stamp_night
+from ..rule_versions import is_club_night, night_rules, stamp_night
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from ..stats.base import cell as stat_cell
 from ..stats.data import Scope, load
@@ -558,8 +558,8 @@ async def create_hand(request: Request, sid: int):
     # The night's snapshot decides which bids may be played and at which values.
     with connect() as db:
         session = get_session(db, sid)
-    bid = load_rules(session_bid_settings(session))["bids"].get(key)
-    if not bid or key not in enabled_bid_keys(session_bid_settings(session)):
+    bid = load_rules(session_bid_settings(db, session))["bids"].get(key)
+    if not bid or key not in enabled_bid_keys(session_bid_settings(db, session)):
         raise HTTPException(400, "Unknown bid")
 
     try:
@@ -699,7 +699,7 @@ async def set_result(request: Request, sid: int, hid: int):
     form = await request.form()
     with connect() as db:
         session = require_open(db, sid)
-        rules = load_rules(session_bid_settings(session))["bids"]
+        rules = load_rules(session_bid_settings(db, session))["bids"]
         hand = db.execute("SELECT * FROM hands WHERE id=? AND session_id=?", (hid, sid)).fetchone()
         if not hand:
             raise HTTPException(404)
@@ -710,7 +710,7 @@ async def set_result(request: Request, sid: int, hid: int):
         try:
             key = str(form.get("bid_key") or hand["bid_key"])
             # A correction may keep the hand's bid even if the club has since disabled it.
-            if key != hand["bid_key"] and key not in enabled_bid_keys(session_bid_settings(session)):
+            if key != hand["bid_key"] and key not in enabled_bid_keys(session_bid_settings(db, session)):
                 raise ValueError("Meldingen er ikke slået til i klubben")
             bid = rules[key]
             declarer = int(form.get("declarer") or original_declarer)
@@ -794,13 +794,7 @@ def add_penalty(request: Request, sid: int, player_id: int = Form(...)):
             raise HTTPException(400, "Invalid player")
         db.execute(
             "INSERT INTO penalty_payments(session_id,player_id,amount) VALUES (?,?,?)",
-            (
-                sid,
-                player_id,
-                get_session(db, sid)["fejl40_rate"]
-                if get_session(db, sid)["fejl40_rate"] is not None
-                else club_settings(db)["fejl40"],
-            ),
+            (sid, player_id, night_rules(db, sid)["fejl40"]),
         )
         data = view_data(db, sid)
     return render(request, "partials/session_content.html", **data)
@@ -854,7 +848,7 @@ def reopen_night(request: Request, sid: int):
 def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)):
     try:
         with connect() as db:
-            session = require_open(db, sid)
+            require_open(db, sid)
             if not db.execute(
                 "SELECT 1 FROM hands WHERE session_id=?", (sid,)
             ).fetchone():
@@ -862,12 +856,9 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
                     request, sid, "Registrer mindst én hånd, før du afslutter."
                 )
 
-            # Recheck identity; a newly added guest makes this a non-club night.
-            guests = db.execute(
-                "SELECT 1 FROM players WHERE session_id=? AND member_id IS NULL LIMIT 1",
-                (sid,),
-            ).fetchone()
-            is_club = not bool(guests)
+            # Recheck identity; a guest, or a member not on the night's medlemsliste,
+            # makes this a non-club night.
+            is_club = is_club_night(db, sid)
             collect = bool(is_club and collect_club_money)
 
             # Reclosing after corrections must never retain an old settlement.
@@ -875,13 +866,9 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
             db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
 
             if collect:
-                rates = (
-                    json.loads(session["placement_rates"])
-                    if session["placement_rates"]
-                    else json.loads(club_settings(db)["placements"])
-                )
-                entries = settlement_entries(db, sid, session["money_mode"], rates,
-                                             session["point_rate"] or "1")
+                night = night_rules(db, sid)
+                entries = settlement_entries(db, sid, night["money_mode"], night["placements"],
+                                             night["point_rate"])
                 db.executemany(
                     """INSERT INTO club_member_settlements
                     (session_id,member_id,place,amount_numerator,amount_denominator)

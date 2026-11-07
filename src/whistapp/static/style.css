@@ -481,3 +481,22 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .night.stacked .running { grid-row: 2; grid-column: 4; margin-left: 0; padding-left: 4px; }
 /* The live view keeps its own scroll position across refreshes (live_scoreboard.html). */
 #live-scoreboard { overflow-anchor: none; }
+
+/* Graf pr. år / pr. aften for a statistics column. */
+.stat-graph { appearance: none; border: 0; background: none; color: inherit; padding: 0; margin-left: 4px; opacity: .7; vertical-align: -2px; cursor: pointer; }
+.stat-graph:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.stat-graph:hover { opacity: 1; }
+.graph-chart { position: relative; }
+.graph-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+.graph-grid { stroke: #2e404a; stroke-width: 1; }
+.graph-zero { stroke: #566a75; stroke-width: 1; }
+.graph-cross { stroke: #aabcc5; stroke-width: 1; stroke-dasharray: 3 3; }
+.graph-axis { fill: #aabcc5; font-size: 12px; }
+.graph-dot { stroke: #1c2c35; stroke-width: 2; }
+.graph-tip { position: absolute; top: 0; pointer-events: none; background: #10212a; border: 1px solid #566a75; border-radius: 8px; padding: 8px 10px; font-size: .85rem; display: grid; gap: 3px; white-space: nowrap; z-index: 2; }
+.graph-tip[hidden] { display: none; }
+.graph-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; border: 1px solid #aabcc5; vertical-align: 0; }
+.graph-legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.graph-chip { background: #10212a; border: 1px solid #344650; color: #eaf0f4; font-weight: 500; font-size: .85rem; padding: 5px 9px; }
+.graph-chip[aria-pressed="false"] { color: #aabcc5; opacity: .7; }
+.graph-table summary { color: #aabcc5; font-size: .9rem; }

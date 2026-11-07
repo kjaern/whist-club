@@ -55,7 +55,7 @@ async def require_authentication(request: Request, call_next):
 
 
 # Pages usable before a club is chosen: account upkeep and the club picker.
-CLUBLESS_PATHS = ("/account", "/account/password", "/logout", "/clubs", "/clubs/select", "/clubs/new", "/guide")
+CLUBLESS_PATHS = ("/account", "/account/password", "/logout", "/clubs", "/clubs/select", "/clubs/new", "/clubs/new-test", "/guide")
 
 
 async def _authorized_request(request, call_next, path):

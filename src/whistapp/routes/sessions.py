@@ -28,6 +28,7 @@ from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcom
 from ..stats.base import cell as stat_cell
 from ..stats.data import Scope, load
 from ..stats.registry import rule_sources, statistic, topic_tables, topics_for
+from ..stats.trends import periods as trend_periods, trend
 from ..web import (
     can_manage_club,
     fmt,
@@ -152,8 +153,11 @@ def _statistics_page(request, db, scope, topic, **context):
     data = load(db, scope)
     topics = topics_for(scope.kind)
     current = next((t for t in topics if t.key == topic), topics[0])
+    tables = topic_tables(current, data)
+    sub_periods = trend_periods(data)
+    trends = {stat.key: trend(stat, table, data, sub_periods) for stat, table in tables}
     return render(request, "statistics.html", scope=scope, topics=topics, topic=current,
-                  tables=topic_tables(current, data), origin=scope.origin, stat_cell=stat_cell,
+                  tables=tables, trends=trends, origin=scope.origin, stat_cell=stat_cell,
                   **context)
 
 

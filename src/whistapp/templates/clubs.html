@@ -16,6 +16,10 @@
 <form method="post" action="/clubs/new">
 <label>Klubnavn<input name="name" value="{{ name }}" required maxlength="80"></label>
 <button type="submit">Opret klub</button>
+</form>
+<form method="post" action="/clubs/new-test">
+<p class="muted">Eller opret en testklub med opdigtede medlemmer og 10–15 afsluttede spilaftener om året i fem år, til at prøve statistik og grafer.</p>
+<button type="submit" class="secondary">Opret testklub med dummy-aftener</button>
 </form></section>
 {% endif %}
 {% endblock %}

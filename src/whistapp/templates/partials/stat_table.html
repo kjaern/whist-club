@@ -1,10 +1,11 @@
 {% if table.rows %}
+  {% if trend %}<script type="application/json" id="trend-{{ stat.key }}">{{ trend|tojson }}</script>{% endif %}
   <div class="stat-scroll">
     <table class="night stat-table">
       <thead>
         <tr>
           {% for c in table.columns %}
-            <th scope="col"><button type="button" class="stat-sort">{{ c.label }}</button>{% if c.description %}<button type="button" class="stats-heading-button stat-info" data-stat-title="{{ c.label }}" data-stat-description="{{ c.description }}" aria-haspopup="dialog" aria-label="Forklaring: {{ c.label }}">ⓘ</button>{% endif %}</th>
+            <th scope="col"><button type="button" class="stat-sort">{{ c.label }}</button>{% if c.description %}<button type="button" class="stats-heading-button stat-info" data-stat-title="{{ c.label }}" data-stat-description="{{ c.description }}" aria-haspopup="dialog" aria-label="Forklaring: {{ c.label }}">ⓘ</button>{% endif %}{% if trend and c.key in trend.columns %}<button type="button" class="stat-graph" data-stat="{{ stat.key }}" data-col="{{ c.key }}" aria-haspopup="dialog" aria-label="Graf pr. {{ trend.per }}: {{ c.label }}" title="Graf pr. {{ trend.per }}"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 13.5h12M3 11l3.5-4 3 2.5L13.5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>{% endif %}</th>
           {% endfor %}
         </tr>
       </thead>

@@ -99,6 +99,12 @@ class StatsData:
         return replace(self, hands=[h for h in self.hands if h.year == year],
                        nights={k: n for k, n in self.nights.items() if n.year == year})
 
+    def for_night(self, sid):
+        """One night of the loaded scope, as if it had been loaded on its own."""
+        return replace(self, scope=replace(self.scope, kind="night", session_id=sid),
+                       hands=[h for h in self.hands if h.session_id == sid],
+                       nights={sid: self.nights[sid]})
+
     def years(self):
         return sorted({n.year for n in self.nights.values()}, reverse=True)
 

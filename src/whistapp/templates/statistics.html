@@ -47,6 +47,7 @@
         <button type="button" class="secondary stat-rule" data-key="{{ stat.key }}" aria-haspopup="dialog">Vis regel</button>
       </div>
       {% if stat.description %}<p class="muted">{{ stat.description }}</p>{% endif %}
+      {% set trend = trends.get(stat.key) %}
       {% include 'partials/stat_table.html' %}
     </section>
   {% endfor %}
@@ -67,6 +68,17 @@
     </div>
     <div id="stat-rule-panel"></div>
   </dialog>
+  {% if trends.values()|select|list %}
+    <dialog id="stat-graph-dialog" class="rules-dialog" aria-labelledby="stat-graph-title">
+      <div class="rules-dialog-heading">
+        <strong id="stat-graph-title">Graf</strong><button type="button" class="secondary" id="close-stat-graph" aria-label="Luk graf">Luk ×</button>
+      </div>
+      <div id="stat-graph-chart" class="graph-chart"><div id="stat-graph-tip" class="graph-tip" hidden></div></div>
+      <div id="stat-graph-legend" class="graph-legend" aria-label="Linjer"></div>
+      <details class="graph-table"><summary>Vis tal</summary><div id="stat-graph-table" class="stat-scroll"></div></details>
+    </dialog>
+    <script src="{{ static_url('trend-chart.js') }}"></script>
+  {% endif %}
   <script>
   // Vis regel: the code that computes the statistic, as Vis regler shows a bid's code.
   (() => {

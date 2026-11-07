@@ -1,8 +1,9 @@
+{% from 'partials/info.html' import info %}
 <div id="new-hand-area">
   <section class="card hand-entry">
     <div class="section-heading">
       <h2>
-        Ny hånd
+        Ny hånd {{ info('Ny hånd', 'Hånden gemmes først, når resultatet er udfyldt og du trykker Gem hånd og resultat.') }}
       </h2>
       <div class="entry-heading-actions">
         <span class="muted">Rotation: {{'Fire i træk' if session.rotation_mode=='consecutive' else 'To, pause, to'}}</span>
@@ -13,8 +14,17 @@
       <input type="hidden" name="base_hand_id" value="{{ last_hand_id }}">
       {% if hand_conflict %}<p id="hand-conflict" hidden>Hånden blev ikke gemt: der er gemt en anden hånd i mellemtiden. Formularen er opdateret; tjek melder og spillere, og gem igen.</p>{% endif %}
       <div class="hand-players">
-        <div class="section-heading">
-          <strong>Spillere denne hånd</strong><span class="muted">Vælg 4 · foreslået efter rotation · klik for at ændre</span>
+        <div class="players-line">
+          <strong>Spillere</strong>
+          {# Everyone at the table in seat order; those not in this hand are greyed, those who left struck through. #}
+          <span id="players-summary" class="players-summary">{% for p in players %}<span class="player-name{% if p.id not in suggested %} not-playing{% endif %}{% if not p.active %} gone{% endif %}" data-id="{{p.id}}"{% if not p.active %} title="Gået"{% endif %}>{{p.name}}</span>{% endfor %}</span>
+          <span id="players-count" class="players-warning" hidden></span>
+          <button type="button" class="secondary" id="open-roster" aria-haspopup="dialog">Ret spillere</button>
+          {{ info('Spillere denne hånd', 'De fire spillere er foreslået efter rotationen. Tryk Ret spillere for at vælge andre, markere en spiller som gået, ændre bordrækkefølgen eller tilføje en spiller.') }}
+        </div>
+        <dialog id="roster-dialog" class="rules-dialog roster-dialog" aria-labelledby="roster-dialog-title">
+        <div class="rules-dialog-heading">
+          <strong id="roster-dialog-title">Spillere denne hånd · vælg 4</strong><button type="button" class="secondary close-roster" aria-label="Luk">Luk ×</button>
         </div>
         <div class="player-roster">
           {% for p in players %}
@@ -35,6 +45,7 @@
           </div>
         {% endfor %}
       </div>
+      <div class="roster-tools">
       <details class="seating-editor">
         <summary>
           Ændr bordrækkefølge
@@ -48,10 +59,12 @@
             </div>
           {% endfor %}
         </div>
-        <p class="seating-hint muted">
-          Træk i håndtaget for at ændre rækkefølgen. Gemmes automatisk.
-        </p>
+        <p class="seating-hint">{{ info('Bordrækkefølge', 'Træk i håndtaget for at ændre rækkefølgen. Den gemmes automatisk.') }}</p>
       </details>
+      <details class="roster-add-editor">
+        <summary>
+          Tilføj spiller
+        </summary>
       <div class="roster-add">
         <label for="roster-new-name">Ny spiller</label><input id="roster-new-name" name="name" placeholder="Tilføj en spiller" autocomplete="off"><label for="roster-before">Indsæt før</label><select id="roster-before" name="before_player"><option value="0">Sidst</option>
         {% for p in players %}
@@ -59,6 +72,10 @@
         {% endfor %}
         </select><button type="button" hx-post="/sessions/{{session.id}}/players" hx-include="#roster-new-name,#roster-before" hx-target="#session-content">Tilføj spiller</button>
       </div>
+      </details>
+      </div>
+        <button type="button" class="close-roster roster-done">Færdig</button>
+        </dialog>
     </div>
     <div class="hand-fields">
       <label>Melder<select name="declarer" required>
@@ -84,12 +101,6 @@
       <label id="vip-level-field" hidden>VIP niveau<select id="vip-level"><option value="vip1">1</option><option value="vip2">2</option><option value="vip3">3</option></select></label>
     </div>
     <div class="result-entry">
-      <h3>
-        Resultat for ny hånd
-      </h3>
-      <p class="muted">
-        Hånden gemmes først, når resultatet er udfyldt og du trykker Gem hånd.
-      </p>
       <div id="normal-result" class="result-grid">
         <label>Makker (melder = solo)<select name="partner" id="new-partner">
         {% for p in players if p.id in suggested %}
@@ -119,12 +130,14 @@
           {% endfor %}
         </div>
       </div>
+      <div class="save-row">
       <button class="save-bid"
       {% if active|length<4 %}
         disabled
       {% endif %}
       >Gem hånd og resultat</button>
       <button class="secondary" type="reset">Nulstil</button>
+      </div>
     </div>
   </form>
 </section>
@@ -164,7 +177,20 @@ const wrapper=document.createElement('label');wrapper.className='chip';const che
 const bidders=new Set(isPaskrig?selected.map(p=>p.id):[declarer.value,...Array.from(going.querySelectorAll('input:checked')).map(x=>x.value)]);
 form.querySelectorAll('.special-actual').forEach(el=>{el.hidden=!isSpecial||!bidders.has(el.dataset.player)});
 const save=form.querySelector('.save-bid');if(save)save.disabled=selected.length!==4;
+const chosen=new Set(selected.map(p=>p.id));
+document.querySelectorAll('#players-summary .player-name').forEach(el=>el.classList.toggle('not-playing',!chosen.has(el.dataset.id)));
+const count=document.getElementById('players-count');
+count.hidden=selected.length===4;count.textContent=selected.length+' valgt – vælg 4';
 }
+const roster=document.getElementById('roster-dialog');
+document.getElementById('open-roster').addEventListener('click',()=>{window.whistRosterOpen=true;window.whistRosterScroll=window.scrollY;roster.showModal();});
+const closeRoster=()=>{window.whistRosterOpen=false;roster.close();};
+roster.querySelectorAll('.close-roster').forEach(b=>b.addEventListener('click',closeRoster));
+roster.addEventListener('cancel',()=>{window.whistRosterOpen=false;});
+roster.addEventListener('click',e=>{if(e.target===roster)closeRoster();});
+// Marking a player as gone, reordering or adding a player redraws the form; keep the popup open.
+// The page behind stays where it was, so closing the popup returns to the same place.
+if(window.whistRosterOpen){roster.showModal();window.scrollTo(0,window.whistRosterScroll||0);setTimeout(()=>window.scrollTo(0,window.whistRosterScroll||0),50);}
 vipLevel.addEventListener('change',()=>{if(!Array.from(bid.options).some(o=>o.value===vipLevel.value)){bid.add(new Option('VIP '+vipLevel.value.slice(-1),vipLevel.value));}bid.value=vipLevel.value;bid.dispatchEvent(new Event('change',{bubbles:true}));});
 form.addEventListener('change',e=>{if(e.target.matches('[name=participants],[name=declarer],[name=bid_key],[name=going]'))update()});
 form.addEventListener('reset',()=>setTimeout(update,0));

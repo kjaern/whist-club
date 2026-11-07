@@ -329,3 +329,120 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .check input { width: 1.1rem; height: 1.1rem; accent-color: #4dc6a0; }
 .ai-club + .ai-club { border-top: 1px solid #344650; padding-top: 14px; margin-top: 14px; }
 .ai-club h3 { margin: 0; }
+
+/* Spiladministration: fold-outs for rarely used roster tools. */
+.roster-tools { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px 18px; margin: 2px 0; }
+.roster-tools > details { margin: 0; }
+.roster-tools > details[open] { flex-basis: 100%; }
+.roster-tools summary { font-size: .85rem; font-weight: 600; color: #72d7b4; }
+.hand-entry .roster-tools .roster-add { margin-top: 6px; }
+
+/* Spiladministration on phones: totals and the last hands instead of the wide table. */
+.night-summary { display: none; }
+.total-chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(105px, 1fr)); gap: 6px; }
+.total-chip { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; min-width: 0; padding: 7px 9px; border-radius: 8px; color: #fff; }
+.total-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .85rem; }
+.total-chip strong { font-size: 1.05rem; }
+.total-chip.chip-inactive { opacity: .6; }
+.night-summary h3 { font-size: .95rem; margin: 14px 0 6px; }
+.recent-hands { display: grid; gap: 6px; }
+.recent-hand { display: grid; gap: 4px; padding: 7px 9px; background: #10212a; border: 1px solid #344650; border-radius: 9px; }
+.recent-line { display: flex; align-items: center; gap: 8px; }
+.recent-line .hand-num { font-weight: 800; color: #aabcc5; }
+.recent-bid { flex: 1; min-width: 0; font-size: .88rem; }
+.recent-bid .actual { color: #a6d4ff; }
+.recent-bid .actual:before { content: '→'; margin-right: 2px; }
+.recent-deltas { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: .8rem; color: #aabcc5; }
+.recent-deltas .delta { font-weight: 700; }
+.recent-deltas .delta-positive { color: #8dc5a5; }
+.recent-deltas .delta-negative { color: #d49a9a; }
+.show-all-hands { width: 100%; margin-top: 8px; }
+/* The same hand editor as in the table: a centred panel above the page. */
+.recent-hands .row-editor summary { list-style: none; background: #344650; padding: 6px 12px; border-radius: 6px; font-size: .8rem; font-weight: 600; }
+.recent-hands .row-editor summary::-webkit-details-marker { display: none; }
+.recent-hands .row-editor[open] summary { background: #3a9a7c; }
+.recent-hands .editor-panel { position: fixed; z-index: 1000; left: 50%; top: 10vh; transform: translateX(-50%); width: min(540px, calc(100vw - 24px)); max-height: 82vh; overflow-y: auto; overscroll-behavior: contain; padding: clamp(16px, 3vw, 28px); border: 1px solid #566a75; border-radius: 9px; background: #1c2c35; box-shadow: 0 18px 70px #000d; }
+.recent-hands .editor-panel form { display: grid; gap: 14px; margin: 18px 0; }
+.recent-hands .editor-panel label { font-size: 1rem; }
+.recent-hands .editor-panel select { width: 100%; min-height: 46px; padding: 10px; }
+.recent-hands .editor-panel button { min-height: 44px; }
+.recent-hands .editor-heading { font-size: 1.1rem; font-weight: 700; }
+.recent-hands .editor-panel .cancel-edit { width: 100%; margin-top: 4px; }
+@media (max-width: 700px) {
+  /* Phones: Ny hånd, then the results (newest hand on top), then Klubkasse and the night actions. */
+  #session-content { display: flex; flex-direction: column; }
+  #new-hand-area { order: 1; } #editor-results { order: 2; } #session-content > .finance-card { order: 3; } #session-content > .night-actions { order: 4; }
+  .night-summary { display: block; }
+  :not(.show-all-hands-open) > #editor-results .all-hands { display: none; }
+  .show-all-hands-open > #editor-results .all-hands { margin-top: 10px; }
+}
+/* PC: the table scrolls in its own box, with names on top and totals at the bottom. */
+@media (min-width: 701px) {
+  #editor-results .all-hands { max-height: 70vh; overflow: auto; }
+  #editor-results .night thead th { position: sticky; top: 0; z-index: 2; }
+  #editor-results .night tfoot th { position: sticky; bottom: 0; z-index: 2; }
+}
+
+/* Every hand in the compact list; it scrolls in its own box. */
+.recent-hands { max-height: 55vh; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+
+/* Players for the next hand: one line showing who plays, changes in a popup. */
+.players-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.players-summary { font-weight: 600; }
+.players-line #open-roster { padding: 6px 12px; }
+.roster-dialog { width: min(520px, calc(100vw - 24px)); }
+.roster-dialog .player-roster { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.roster-dialog .roster-person { justify-content: space-between; }
+.roster-dialog .player-choice { flex: 1; padding: 10px 12px; font-size: 1rem; }
+.roster-dialog .player-status { min-width: 70px; font-size: .8rem; }
+.roster-dialog .roster-tools { margin-top: 12px; }
+.roster-dialog .roster-done { width: 100%; margin-top: 14px; }
+.roster-dialog .seating-hint { margin: 0; }
+.result-entry h3 .stat-info, .section-heading h2 .stat-info { font-size: .9rem; }
+
+/* Gem and Nulstil on one line. */
+.hand-entry .save-row { display: flex; align-items: center; gap: 8px; }
+
+/* Klubkasse: heading and the Fejl40 form on one line. */
+.finance-card { padding: 10px 14px; }
+.finance-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
+.finance-line h2 { margin: 0; font-size: 1.05rem; }
+.finance-line .fee-inline { flex: 1 1 260px; gap: 6px; }
+.finance-line .fee-inline label { width: auto; font-size: .85rem; }
+.finance-line .fee-inline select { padding: 6px 8px; }
+.finance-line .fee-inline button { padding: 6px 10px; }
+.finance-card .fee-entries { margin: 6px 0 0; }
+.finance-card .fee-total { margin: 6px 0 0; font-size: .88rem; }
+
+/* Phones: Ny hånd at about half its former height. */
+@media (max-width: 700px) {
+  .hand-entry { padding: 10px 12px; }
+  .hand-entry .section-heading h2 { font-size: 1.05rem; }
+  .hand-entry .players-line { font-size: .85rem; gap: 4px 8px; }
+  .hand-entry .players-line #open-roster { padding: 4px 10px; }
+  .hand-entry .hand-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .hand-entry .hand-fields label, .hand-entry .result-entry label { font-size: .72rem; gap: 2px; }
+  .hand-entry .hand-fields select, .hand-entry .result-entry select { padding: 6px 4px; font-size: .9rem; }
+  .hand-entry #target-fields .fixed { padding: 6px 4px; font-size: .72rem; }
+  .hand-entry .result-entry { gap: 6px; padding-top: 6px; }
+  .hand-entry .result-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .hand-entry .save-row .save-bid { flex: 1; padding: 9px; }
+  .hand-entry .save-row button.secondary { padding: 9px 10px; }
+  .finance-line .fee-inline { flex-wrap: nowrap; }
+  .finance-line .fee-inline select { flex: 1 1 auto; max-width: none; }
+}
+@media (max-width: 700px) {
+  .hand-entry #going-options { gap: 4px; align-items: center; }
+  .hand-entry #going-options .chip { padding: 5px 8px; font-size: .8rem; }
+}
+
+.players-warning { color: #ffb4ba; font-weight: 600; }
+/* Everyone at the table as a chip on its own wrapping row; whoever sits out is clearly faded. */
+.players-line .players-summary { order: 10; flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 5px; }
+.players-summary .player-name { padding: 3px 10px; border-radius: 999px; background: #2f5a4e; color: #fff; font-weight: 600; white-space: nowrap; }
+.players-summary .player-name.not-playing { background: #22323a; color: #7f939c; font-weight: 400; opacity: .7; }
+.players-summary .player-name.gone { text-decoration: line-through; }
+.recent-deltas .not-playing { color: #667a84; opacity: .7; }
+/* In the table too: the cells of a player sitting out a hand are faded. */
+#editor-results .night td.sitting-out { color: #66808a; background: #121d23; }
+#editor-results .night td.sitting-out .running { opacity: .6; }

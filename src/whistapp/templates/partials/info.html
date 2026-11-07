@@ -1,0 +1,4 @@
+{# An ⓘ that opens the explanation in the shared dialog (base.html), as on the statistics pages. #}
+{% macro info(title, text) -%}
+<button type="button" class="stats-heading-button stat-info" data-stat-title="{{ title }}" data-stat-description="{{ text }}" aria-haspopup="dialog" aria-label="Forklaring: {{ title }}">ⓘ</button>
+{%- endmacro %}

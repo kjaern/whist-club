@@ -29,6 +29,8 @@
     </form>
   </section>
   {% endif %}
+  {# Photos matter for imported nights; on a live night they are an extra, so they go last. #}
+  {% set photos_card %}
   <section class="card"><h2>Originalark</h2>
     <form method="post" action="/sessions/{{session.id}}/photos" enctype="multipart/form-data">
       <label>Tilføj fotos <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
@@ -41,6 +43,8 @@
       </div>{% endfor %}
     </div>{% endif %}
   </section>
+  {% endset %}
+  {% if session.origin == 'imported' %}{{ photos_card }}{% endif %}
   {% if source_previews %}
   <style>
     .source-preview { overflow:auto; max-height:32rem; margin:.5rem 0 1rem; }
@@ -86,6 +90,7 @@
     {% include 'partials/session_content.html' %}
   </div>
   <p id="hand-toast" class="error toast" role="alert" hidden></p>
+  {% if session.origin != 'imported' %}{{ photos_card }}{% endif %}
   <script>
 // Only the results panel is refreshed. Never overwrite a draft hand form.
 (function () {

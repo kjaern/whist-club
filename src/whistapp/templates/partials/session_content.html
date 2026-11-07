@@ -1,3 +1,4 @@
+{% from 'partials/info.html' import info %}
 {% if session.ended_at %}
   {% set show_live_settlement = false %}
   {% include "partials/live_scoreboard.html" %}
@@ -5,13 +6,12 @@
   {% include 'partials/new_hand_area.html' %}
   {% include 'partials/editor_results.html' %}
 {% endif %}
+{# Compact: the heading and the Fejl40 form share one line. #}
 <section class="card finance-card">
-  <div class="section-heading">
+  <div class="finance-line">
     <h2>
-      Klubkasse
+      Klubkasse {{ info('Klubkasse', 'Point og penge holdes adskilt: Fejl40 og betalingen til klubkassen ændrer ikke pointene.') }}
     </h2>
-    <span class="muted">Point og penge holdes adskilt</span>
-  </div>
   {% if not session.ended_at %}
     <form class="fee-inline" hx-post="/sessions/{{session.id}}/penalties" hx-target="#session-content">
       <label for="fee-player">Fejl40 · {{fee}} kr</label>
@@ -23,6 +23,7 @@
       <button type="submit">+ Tilføj</button>
     </form>
   {% endif %}
+  </div>
   {% if penalties %}
     <div class="fee-entries">
       {% for item in penalties %}
@@ -34,9 +35,11 @@
       {% endfor %}
     </div>
   {% endif %}
-  <p>
+  {% if penalties or session.ended_at %}
+  <p class="fee-total">
     <strong>Fejl40 i alt: {{penalty_total}} kr</strong>
   </p>
+  {% endif %}
   {% if settled %}
     <h3>
       {{ money_mode_label|default('Pladsbetaling') }}
@@ -62,7 +65,7 @@
       {% if session.is_club %}
         <label><input type="checkbox" name="collect_club_money" value="true" checked> Medregn betaling til klubkassen</label>
       {% else %}
-        <p class="muted">Gæster deltager: aftenen tæller ikke i klubstatistik eller klubkasse.</p>
+        <span class="muted">Uden for statistik {{ info('Gæster deltager', 'Når gæster spiller med, tæller aftenen ikke i klubstatistik eller klubkasse.') }}</span>
       {% endif %}
       <button type="submit">Afslut spilaften</button>
     </form>

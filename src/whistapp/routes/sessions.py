@@ -24,6 +24,7 @@ from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
 from ..finance import export_workbook, export_year_workbook, settlement_entries
+from ..rule_versions import stamp_night
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from ..stats.base import cell as stat_cell
 from ..stats.data import Scope, load
@@ -135,6 +136,7 @@ async def create_session(request: Request):
                 for position, (name, cid) in enumerate(names)
             ],
         )
+        stamp_night(db, sid)
     return RedirectResponse(f"/sessions/{sid}", status_code=303)
 
 

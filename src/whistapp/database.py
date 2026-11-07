@@ -22,6 +22,7 @@ def audit_actor_reset(token):
 from pathlib import Path
 
 from .club import initial_club_name, initial_finance, initial_roster
+from .rule_versions import migrate as migrate_rule_versions
 from .settings import DATA
 
 DB_PATH = Path(os.environ.get("WHIST_DB", str(DATA / "whist.sqlite3")))
@@ -472,3 +473,23 @@ def init_db():
             INSERT INTO audit_events(actor_username,actor_account_id,session_id,hand_id,entity,action,before_json,after_json,operation_id)
             VALUES(audit_username(),audit_account_id(),OLD.id,NULL,'sessions','delete',json_object('id', OLD.id, 'title', OLD.title, 'ended_at', OLD.ended_at, 'origin', OLD.origin),NULL,audit_operation_id());
             END""")
+
+        # Versioned club rules: each night points to the rules and medlemsliste it was
+        # played under (see rule_versions.py). The older per-night snapshot columns stay.
+        db.execute("""CREATE TABLE IF NOT EXISTS club_rule_versions (
+            id INTEGER PRIMARY KEY,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            number INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_by TEXT NOT NULL,
+            placements TEXT NOT NULL,
+            fejl40 INTEGER NOT NULL,
+            money_mode TEXT NOT NULL,
+            point_rate TEXT NOT NULL,
+            bid_settings TEXT NOT NULL,
+            member_ids TEXT NOT NULL,
+            UNIQUE(club_id, number)
+        )""")
+        if "rule_version_id" not in {r[1] for r in db.execute("PRAGMA table_info(sessions)")}:
+            db.execute("ALTER TABLE sessions ADD COLUMN rule_version_id INTEGER REFERENCES club_rule_versions(id)")
+        migrate_rule_versions(db)

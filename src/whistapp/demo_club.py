@@ -12,6 +12,7 @@ from fractions import Fraction
 from .bids import get_bid
 from .buildinfo import build_stamp
 from .finance import settlement_entries
+from .rule_versions import stamp_night
 from .rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from .web import hand_round
 
@@ -94,6 +95,7 @@ def fill_test_club(db, club_id, seed=None, today=None):
                 (day.isoformat(), _ts(start), _ts(start + timedelta(hours=4)), settings["placements"],
                  settings["fejl40"], club_id, settings["money_mode"], settings["point_rate"],
                  settings["bid_settings"], *build_stamp())).lastrowid
+            stamp_night(db, sid)
             players = [db.execute(
                 "INSERT INTO players(session_id,name,member_id,seat_order) VALUES (?,?,?,?)",
                 (sid, names[mid], mid, seat)).lastrowid for seat, mid in enumerate(table)]

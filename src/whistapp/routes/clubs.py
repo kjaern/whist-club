@@ -7,6 +7,7 @@ from ..auth import current_account
 from ..club import active_club_id, initial_finance
 from ..database import connect
 from ..demo_club import fill_test_club
+from ..rule_versions import current_version_id
 from ..web import can_create_club, FOUNDING_CLUB_ID, render, user_clubs
 
 router = APIRouter()
@@ -45,6 +46,7 @@ def _found_club(db, name, account):
             "INSERT INTO club_members(name,status,is_club_admin,club_id) VALUES (?,'active',1,?)",
             (founder["name"], club_id)).lastrowid
         db.execute("INSERT INTO member_accounts(member_id,user_id) VALUES (?,?)", (member_id, account["id"]))
+    current_version_id(db, club_id)
     return club_id
 
 

@@ -22,6 +22,7 @@ from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import settlement_entries
+from ..rule_versions import stamp_night
 from ..historical_import import (
     decimal_text,
     field_issues,
@@ -1609,6 +1610,7 @@ async def import_final(request: Request):
               server_version,server_commit) VALUES (?,?,?,'imported',?,0,?,?,?)""",
             (title, timestamp, timestamp, int(all(mapping)), active_club_id(), *build_stamp()),
         ).lastrowid
+        stamp_night(db, sid)
         db.execute(
             "UPDATE sessions SET date_precision=? WHERE id=?", (date_precision, sid)
         )

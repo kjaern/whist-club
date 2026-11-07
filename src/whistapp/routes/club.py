@@ -12,6 +12,7 @@ from ..auth import is_server_admin
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import MONEY_MODES
+from ..rule_versions import current_version_id
 from ..rules import bid_classes, bid_type_order
 from ..web import can_manage_club, fmt, render
 
@@ -323,6 +324,7 @@ async def save_club(request: Request):
             )
             if club_name is not None:
                 db.execute("UPDATE clubs SET name=? WHERE id=?", (club_name, active_club_id()))
+            current_version_id(db, active_club_id())
             db.execute("DELETE FROM club_member_aliases WHERE club_id=?", (active_club_id(),))
             db.executemany(
                 "INSERT INTO club_member_aliases(member_id,club_id,alias) VALUES (?,?,?)",

@@ -1,0 +1,3 @@
+# Text files are stored with LF and checked out with LF, also on Windows: the app runs in a
+# Linux container, where CRLF breaks shell scripts and turns every line into a diff.
+* text=auto eol=lf

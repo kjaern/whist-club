@@ -34,6 +34,7 @@ from ..web import (
     can_manage_club,
     fmt,
     get_session,
+    night_state_token,
     hand_round,
     night_time,
     render,
@@ -279,6 +280,18 @@ def session_page(request: Request, sid: int):
     return render(request, "session.html", **data)
 
 
+def _night_summary(entries, parsed):
+    """A change to the night itself: closing, reopening and what its settlement charged."""
+    ended = [(parsed(e["before_json"]) or {}, parsed(e["after_json"]) or {}) for e in entries
+             if e["entity"] == "sessions" and e["action"] == "update"]
+    settled = any(e["entity"] == "club_member_settlements" for e in entries)
+    if any(b.get("ended_at") and not a.get("ended_at") for b, a in ended):
+        return "genåbnede spilaftenen"
+    if any(a.get("ended_at") and not b.get("ended_at") for b, a in ended):
+        return "afsluttede spilaftenen" + (" og opdaterede afregningen" if settled else "")
+    return "ændrede afregningen" if settled else "ændrede spilaftenen"
+
+
 def _history_operations(db, sid):
     """Render one human-readable entry per changed hand, never per SQL row."""
     events = [dict(row) for row in db.execute(
@@ -337,7 +350,7 @@ def _history_operations(db, sid):
                 if last and first and last.get("actual") != first.get("actual"):
                     summary += f": {last.get('actual')} → {first.get('actual')} stik"
         else:
-            summary = "ændrede spilaftenen"
+            summary = _night_summary(entries, parsed)
         result.append({"actor_username": group["actor_username"] or "Ukendt bruger",
                        "created_at": group["created_at"], "summary": summary})
     return result
@@ -825,33 +838,63 @@ def close_error(request: Request, sid: int, message: str):
     )
 
 
+STALE_NIGHT = ("Spilaftenen er blevet ændret på en anden enhed, siden siden blev vist. "
+               "Se den nye stilling, og prøv igen.")
+
+
+def _stale(db, sid, form_state):
+    """True if the page's form was built before another device changed the night."""
+    return bool(form_state) and form_state != night_state_token(db, sid)
+
+
+def _settlement(db, sid):
+    return {r[0]: Fraction(r[1], r[2]) for r in db.execute(
+        "SELECT member_id,amount_numerator,amount_denominator FROM club_member_settlements WHERE session_id=?", (sid,))}
+
+
+def _settlement_change(db, before, after):
+    """Per member, what the night charged before and after, for the evening log."""
+    changed = sorted(m for m in set(before) | set(after) if before.get(m, 0) != after.get(m, 0))
+    if not changed:
+        return "afregningen er uændret" if before else ""
+    names = {r[0]: r[1] for r in db.execute(
+        "SELECT id,name FROM club_members WHERE id IN (%s)" % ",".join("?" * len(changed)), changed)}
+    return "afregning ændret: " + ", ".join(
+        f"{names.get(m, f'#{m}')} {fmt(before.get(m, Fraction()))} → {fmt(after.get(m, Fraction()))} kr" for m in changed)
+
+
 @router.post("/sessions/{sid}/reopen")
-def reopen_night(request: Request, sid: int):
-    """Reopen a closed evening for corrections; invalidate its old settlement."""
+def reopen_night(request: Request, sid: int, night_state: str = Form("")):
+    """Reopen a closed evening for corrections. Its settlement stays until it is closed again."""
     with connect() as db:
+        db.execute("BEGIN IMMEDIATE")  # two devices cannot both pass the checks below
         session = get_session(db, sid)
         if session["ended_at"] is None:
             return RedirectResponse(f"/sessions/{sid}", status_code=303)
-        db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
-        db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
-        db.execute(
-            "UPDATE sessions SET ended_at=NULL, collect_club_money=0 WHERE id=?", (sid,)
-        )
+        if _stale(db, sid, night_state):
+            db.rollback()
+            return close_error(request, sid, STALE_NIGHT)
+        db.execute("UPDATE sessions SET ended_at=NULL WHERE id=?", (sid,))
         db.execute(
             "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
-            (sid, request.session.get("user", "admin"), "Genåbnet til rettelse; tidligere pladsbetaling annulleret"),
+            (sid, request.session.get("user", "admin"),
+             "Genåbnet til rettelse; afregningen gælder, indtil aftenen afsluttes igen"),
         )
     return RedirectResponse(f"/sessions/{sid}", status_code=303)
 
 
 @router.post("/sessions/{sid}/end")
-def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)):
+def end_night(request: Request, sid: int, collect_club_money: bool = Form(False), night_state: str = Form("")):
     try:
         with connect() as db:
-            require_open(db, sid)
+            db.execute("BEGIN IMMEDIATE")  # two devices cannot both pass the checks below
+            if get_session(db, sid)["ended_at"] is not None or _stale(db, sid, night_state):
+                db.rollback()
+                return close_error(request, sid, STALE_NIGHT)
             if not db.execute(
                 "SELECT 1 FROM hands WHERE session_id=?", (sid,)
             ).fetchone():
+                db.rollback()
                 return close_error(
                     request, sid, "Registrer mindst én hånd, før du afslutter."
                 )
@@ -861,30 +904,35 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
             is_club = is_club_night(db, sid)
             collect = bool(is_club and collect_club_money)
 
-            # Reclosing after corrections must never retain an old settlement.
-            db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
-            db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
-
+            # Work out the new settlement first; the old one is replaced only once it exists,
+            # in this transaction, so a failure leaves the previous settlement in place.
+            entries = []
             if collect:
                 night = night_rules(db, sid)
                 entries = settlement_entries(db, sid, night["money_mode"], night["placements"],
                                              night["point_rate"])
-                db.executemany(
-                    """INSERT INTO club_member_settlements
-                    (session_id,member_id,place,amount_numerator,amount_denominator)
-                    VALUES (?,?,?,?,?)""",
-                    [(sid, *entry) for entry in entries],
-                )
-                if db.execute(
-                    "SELECT COUNT(*) FROM club_member_settlements WHERE session_id=?",
-                    (sid,),
-                ).fetchone()[0] != len(entries):
-                    raise ValueError("Incomplete settlement")
+            before = _settlement(db, sid)
+            db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
+            db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
+            db.executemany(
+                """INSERT INTO club_member_settlements
+                (session_id,member_id,place,amount_numerator,amount_denominator)
+                VALUES (?,?,?,?,?)""",
+                [(sid, *entry) for entry in entries],
+            )
+            if len(_settlement(db, sid)) != len(entries):
+                raise ValueError("Incomplete settlement")
 
             db.execute(
                 "UPDATE sessions SET is_club=?,collect_club_money=?,ended_at=CURRENT_TIMESTAMP WHERE id=?",
                 (int(is_club), int(collect), sid),
             )
+            change = _settlement_change(db, before, _settlement(db, sid))
+            if change:
+                db.execute(
+                    "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
+                    (sid, request.session.get("user", "admin"), f"Afsluttet; {change}"),
+                )
     except (ValueError, TypeError, KeyError) as exc:
         logging.getLogger(__name__).warning("Cannot close session %s: %s", sid, exc)
         return close_error(request, sid, f"Spilaftenen blev ikke afsluttet: {exc}")

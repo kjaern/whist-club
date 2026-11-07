@@ -1,5 +1,6 @@
 """Shared web helpers: templates, permission checks and night lookups used by the route modules."""
 
+import hashlib
 import json
 import re
 
@@ -200,6 +201,27 @@ def session_bid_settings(db, session):
 
 def session_rules(db, sid):
     return load_rules(session_bid_settings(db, get_session(db, sid)))["bids"]
+
+
+def night_state_token(db, sid):
+    """What a page showed of a night: hands, scores, Fejl40, players and whether it is closed.
+
+    Close and reopen forms send it back; if another device changed the night in between,
+    the request is refused rather than closing a result the person did not see.
+    """
+    parts = [
+        [tuple(r) for r in db.execute(
+            "SELECT id,bid_key,target,actual,won,partner_id FROM hands WHERE session_id=? ORDER BY id", (sid,))],
+        [tuple(r) for r in db.execute(
+            """SELECT hs.hand_id,hs.player_id,hs.numerator,hs.denominator FROM hand_scores hs
+            JOIN hands h ON h.id=hs.hand_id WHERE h.session_id=? ORDER BY hs.hand_id,hs.player_id""", (sid,))],
+        [tuple(r) for r in db.execute(
+            "SELECT id,player_id,amount FROM penalty_payments WHERE session_id=? ORDER BY id", (sid,))],
+        [tuple(r) for r in db.execute(
+            "SELECT id,member_id,active FROM players WHERE session_id=? ORDER BY id", (sid,))],
+        db.execute("SELECT ended_at FROM sessions WHERE id=?", (sid,)).fetchone()[0],
+    ]
+    return hashlib.sha256(repr(parts).encode()).hexdigest()[:32]
 
 
 def require_open(db, sid):
@@ -457,6 +479,7 @@ def view_data(db, sid):
             "SELECT bid_settings FROM club_settings WHERE id=?", (session["club_id"],)).fetchone() or ["{}"])[0] or "{}")),
         # The new-hand form remembers which hand it was built after, to refuse stale saves.
         last_hand_id=hands[-1]["id"] if hands else 0,
+        night_state=night_state_token(db, sid),
         rules=load_rules(night["bid_settings"]),
         enabled_bids=enabled_bid_keys(night["bid_settings"]),
         money_mode=money_mode,

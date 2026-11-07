@@ -474,6 +474,17 @@ def init_db():
             VALUES(audit_username(),audit_account_id(),OLD.id,NULL,'sessions','delete',json_object('id', OLD.id, 'title', OLD.title, 'ended_at', OLD.ended_at, 'origin', OLD.origin),NULL,audit_operation_id());
             END""")
 
+        # What a night charges each member is money: every change to it is audited.
+        for action, row in (("insert", "NEW"), ("delete", "OLD")):
+            data = (f"json_object('member_id', {row}.member_id, 'place', {row}.place, "
+                    f"'amount_numerator', {row}.amount_numerator, 'amount_denominator', {row}.amount_denominator)")
+            db.execute(f"""CREATE TRIGGER IF NOT EXISTS audit_club_member_settlements_{action}
+                AFTER {action.upper()} ON club_member_settlements BEGIN
+                INSERT INTO audit_events(actor_username,actor_account_id,session_id,hand_id,entity,action,before_json,after_json,operation_id)
+                VALUES(audit_username(),audit_account_id(),{row}.session_id,NULL,'club_member_settlements','{action}',
+                {"NULL" if action == "insert" else data},{data if action == "insert" else "NULL"},audit_operation_id());
+                END""")
+
         # Versioned club rules: each night points to the rules and medlemsliste it was
         # played under (see rule_versions.py). The older per-night snapshot columns stay.
         db.execute("""CREATE TABLE IF NOT EXISTS club_rule_versions (

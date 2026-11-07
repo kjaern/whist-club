@@ -44,6 +44,9 @@
     <h3>
       {{ money_mode_label|default('Pladsbetaling') }}
     </h3>
+    {% if not session.ended_at %}
+      <p class="muted">Afregningen fra sidst aftenen blev afsluttet. Den gælder, indtil aftenen afsluttes igen.</p>
+    {% endif %}
     <div class="settlement-list">
       {% for item in settled %}
         <div>
@@ -62,6 +65,7 @@
   <a class="button secondary" href="/sessions/{{session.id}}/history">Ændringshistorik</a>
   {% if not session.ended_at %}
     <form method="post" action="/sessions/{{session.id}}/end" onsubmit="return confirm('Afslut spilaftenen? Den bliver låst for ændringer.')">
+      <input type="hidden" name="night_state" value="{{ night_state }}">
       {% if session.is_club %}
         <label><input type="checkbox" name="collect_club_money" value="true" checked> Medregn betaling til klubkassen</label>
       {% else %}
@@ -71,7 +75,8 @@
     </form>
   {% else %}
     <strong>✓ Afsluttet {{night_time(session, 'ended_at')}}</strong>
-    <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen til rettelse? Tidligere pladsbetaling annulleres og beregnes igen, når du afslutter.')">
+    <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen til rettelse? Den nuværende afregning gælder, indtil du afslutter igen.')">
+      <input type="hidden" name="night_state" value="{{ night_state }}">
       <button type="submit" class="secondary">Genåbn til rettelse</button>
     </form>
   {% endif %}

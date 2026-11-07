@@ -145,6 +145,16 @@ def init_db():
             db.execute("ALTER TABLE hands ADD COLUMN partner_id INTEGER")
         if "origin_client_id" not in hand_cols:
             db.execute("ALTER TABLE hands ADD COLUMN origin_client_id TEXT")
+        # The dealer and the round are decided when a live hand is saved; older and imported
+        # hands stay NULL. first_player_id was the first name of dealer_id (7 Nov 2026).
+        if "first_player_id" in hand_cols and "dealer_id" not in hand_cols:
+            db.execute("ALTER TABLE hands RENAME COLUMN first_player_id TO dealer_id")
+        elif "dealer_id" not in hand_cols:
+            db.execute("ALTER TABLE hands ADD COLUMN dealer_id INTEGER")
+        if "round_no" not in hand_cols:
+            db.execute("ALTER TABLE hands ADD COLUMN round_no INTEGER")
+        if "round_end" not in hand_cols:
+            db.execute("ALTER TABLE hands ADD COLUMN round_end INTEGER")
 
         db.execute("""CREATE TABLE IF NOT EXISTS special_bids (
             hand_id INTEGER NOT NULL REFERENCES hands(id) ON DELETE CASCADE,

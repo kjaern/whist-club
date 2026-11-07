@@ -17,10 +17,10 @@
         <div class="players-line">
           <strong>Spillere</strong>
           {# Everyone at the table in seat order; those not in this hand are greyed, those who left struck through. #}
-          <span id="players-summary" class="players-summary">{% for p in players %}<span class="player-name{% if p.id not in suggested %} not-playing{% endif %}{% if not p.active %} gone{% endif %}" data-id="{{p.id}}"{% if not p.active %} title="Gået"{% endif %}>{{p.name}}</span>{% endfor %}</span>
+          <span id="players-summary" class="players-summary" data-dealer="{{ dealer or '' }}">{% for p in players %}<span class="player-name{% if p.id not in suggested %} not-playing{% endif %}{% if not p.active %} gone{% endif %}{% if p.id == dealer %} dealer{% endif %}" data-id="{{p.id}}"{% if not p.active %} title="Gået"{% endif %}>{{p.name}}</span>{% endfor %}</span>
           <span id="players-count" class="players-warning" hidden></span>
           <button type="button" class="secondary" id="open-roster" aria-haspopup="dialog">Ret spillere</button>
-          {{ info('Spillere denne hånd', 'De fire spillere er foreslået efter rotationen. Tryk Ret spillere for at vælge andre, markere en spiller som gået, ændre bordrækkefølgen eller tilføje en spiller.') }}
+          {{ info('Spillere denne hånd', 'De fire spillere er foreslået efter rotationen, og den gule er den, der giver. Tryk Ret spillere for at vælge andre, markere en spiller som gået, ændre bordrækkefølgen eller tilføje en spiller.') }}
         </div>
         <dialog id="roster-dialog" class="rules-dialog roster-dialog" aria-labelledby="roster-dialog-title">
         <div class="rules-dialog-heading">
@@ -181,6 +181,11 @@ const chosen=new Set(selected.map(p=>p.id));
 document.querySelectorAll('#players-summary .player-name').forEach(el=>el.classList.toggle('not-playing',!chosen.has(el.dataset.id)));
 const count=document.getElementById('players-count');
 count.hidden=selected.length===4;count.textContent=selected.length+' valgt – vælg 4';
+// The dealer is the rotation's dealer if they play, else the next chosen player after them.
+const chips=[...document.querySelectorAll('#players-summary .player-name:not(.gone)')];
+const start=Math.max(0,chips.findIndex(el=>el.dataset.id===document.getElementById('players-summary').dataset.dealer));
+const giver=chips.slice(start).concat(chips.slice(0,start)).find(el=>chosen.has(el.dataset.id));
+chips.forEach(el=>el.classList.toggle('dealer',el===giver));
 }
 const roster=document.getElementById('roster-dialog');
 document.getElementById('open-roster').addEventListener('click',()=>{window.whistRosterOpen=true;window.whistRosterScroll=window.scrollY;roster.showModal();});

@@ -17,7 +17,7 @@ from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
 from .finance import MONEY_MODES
-from .rules import enabled_bid_keys, load_rules
+from .rules import bid_short_names, enabled_bid_keys, load_rules
 from .vision_import import admin_llm_settings
 
 
@@ -274,6 +274,52 @@ def session_players(db, sid, active_only=False):
     ).fetchall()
 
 
+def next_dealer(players, last_dealer, hand_count):
+    """Who deals the next hand: the next player at the table after the last dealer, in seat
+    order, so the deal moves on round the table even when someone joins or leaves.
+    Nights saved before dealers were recorded fall back to counting hands."""
+    seats = [p["id"] for p in players]
+    active = [p["id"] for p in players if p["active"]]
+    if not active:
+        return None
+    if last_dealer in seats:
+        i = seats.index(last_dealer)
+        return next(pid for pid in seats[i + 1:] + seats[:i + 1] if pid in active)
+    return active[hand_count % len(active)]
+
+
+def hand_dealer(players, dealer, participants):
+    """The rotation's dealer if they play the hand, else the first chosen player after them."""
+    active = [p["id"] for p in players if p["active"]]
+    i = active.index(dealer)
+    return next(pid for pid in active[i:] + active[:i] if pid in participants)
+
+
+def hand_round(db, sid, participants):
+    """The dealer of the hand about to be saved, its round, and whether it ends the round.
+
+    A round is over when everyone at the table has dealt in it: whoever left before their
+    deal is not waited for, and whoever joins must deal too. All three are stored with the
+    hand, so later changes to the table never move an earlier round."""
+    players = session_players(db, sid)
+    ids = {p["id"] for p in players if p["active"]}
+    last = db.execute("SELECT dealer_id,round_no,round_end FROM hands WHERE session_id=? ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
+    count = db.execute("SELECT COUNT(*) FROM hands WHERE session_id=?", (sid,)).fetchone()[0]
+    dealer = hand_dealer(players, next_dealer(players, last[0] if last else None, count), participants)
+    if not last or last[1] is None:
+        round_no, dealt = 1, set()
+    elif last[2]:
+        round_no, dealt = last[1] + 1, set()
+    else:
+        round_no = last[1]
+        dealt = {r[0] for r in db.execute(
+            "SELECT dealer_id FROM hands WHERE session_id=? AND round_no=?", (sid, round_no))}
+        # Whoever had still to deal has left the table: that round is over, a new one starts.
+        if ids <= dealt:
+            round_no, dealt = round_no + 1, set()
+    return dealer, round_no, int(ids <= dealt | {dealer})
+
+
 def view_data(db, sid):
     session = get_session(db, sid)
     players = session_players(db, sid)
@@ -330,9 +376,23 @@ def view_data(db, sid):
 
     active = [p for p in players if p["active"]]
     ids = [p["id"] for p in active]
+    # A line goes under the hand that ended a round: the next hand began a new one, or the
+    # latest round is complete for the players at the table now.
+    round_progress = None
+    for row, after in zip(rows, rows[1:] + [None]):
+        number = row["hand"]["round_no"]
+        row["round_no"] = number
+        row["round_end"] = number is not None and bool(
+            row["hand"]["round_end"] or (after is not None and after["hand"]["round_no"] != number))
+    # How far the round in progress has come, counted against who is at the table now.
+    if rows and rows[-1]["round_no"] is not None and not rows[-1]["round_end"]:
+        dealt = {r["hand"]["dealer_id"] for r in rows if r["round_no"] == rows[-1]["round_no"]}
+        round_progress = (len(dealt & set(ids)), len(ids))
     mode = session["rotation_mode"]
     offsets = [0, 1, 2, 3] if mode == "consecutive" else [0, 1, 3, 4]
-    shift = len(hands)
+    # The rotation starts at the next dealer, who also comes first as Melder.
+    dealer = next_dealer(players, hands[-1]["dealer_id"] if hands else None, len(hands))
+    shift = ids.index(dealer) if dealer in ids else 0
     suggested = (
         [ids[(shift + i) % len(ids)] for i in offsets]
         if len(ids) >= max(offsets) + 1
@@ -385,9 +445,14 @@ def view_data(db, sid):
         players=players,
         active=active,
         rows=rows,
+        round_progress=round_progress,
         totals={k: fmt(v) for k, v in totals.items()},
         score_colors=score_colors,
         suggested=suggested,
+        dealer=dealer,
+        # The club's short bid names for the compact table, as set now on Klubadministration.
+        bid_short=bid_short_names(json.loads((db.execute(
+            "SELECT bid_settings FROM club_settings WHERE id=?", (session["club_id"],)).fetchone() or ["{}"])[0] or "{}")),
         # The new-hand form remembers which hand it was built after, to refuse stale saves.
         last_hand_id=hands[-1]["id"] if hands else 0,
         rules=load_rules(session_bid_settings(session)),

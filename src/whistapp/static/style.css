@@ -302,11 +302,11 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .header-actions a:hover { filter: brightness(1.12); }
 
 /* Narrow screens: let header buttons wrap instead of widening the page. */
-@media (max-width: 700px) { header { flex-wrap: wrap; gap: 8px; } .header-actions { flex-wrap: wrap; flex-shrink: 1; justify-content: flex-end; } }
+@media (max-width: 900px) { header { flex-wrap: wrap; gap: 8px; } .header-actions { flex-wrap: wrap; flex-shrink: 1; justify-content: flex-end; } }
 
 /* Club page: one aligned row per bid, a fixed name column and up to three values. */
 .bid-settings { display: grid; gap: .6rem; margin: .5rem 0 1rem; }
-.bid-setting { display: grid; grid-template-columns: auto 9.5rem repeat(3, minmax(0, 6.5rem)); gap: .6rem; align-items: end; }
+.bid-setting { display: grid; grid-template-columns: auto 9.5rem 5.5rem repeat(3, minmax(0, 6.5rem)); gap: .6rem; align-items: end; }
 .bid-setting .bid-move { display: flex; gap: 4px; padding-bottom: 6px; }
 .bid-setting .bid-move button { padding: 4px 8px; }
 .bid-setting label { font-weight: 600; font-size: .85rem; }
@@ -314,7 +314,7 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .bid-setting .bid-toggle { display: flex; align-items: center; gap: .45rem; font-size: 1rem; padding-bottom: 9px; }
 .bid-setting .bid-toggle input { width: 1.1rem; height: 1.1rem; accent-color: #4dc6a0; flex: none; }
 .bid-setting .bid-toggle { white-space: nowrap; }
-@media (max-width: 500px) { .bid-setting { grid-template-columns: auto 1fr repeat(3, minmax(0, 4.5rem)); } }
+@media (max-width: 500px) { .bid-setting { grid-template-columns: auto 1fr 4.5rem repeat(3, minmax(0, 4.5rem)); } }
 
 /* Rules dialog: the club's configured values above the bid source. */
 .bid-rule-values { border-collapse: collapse; margin: .25rem 0 1rem; }
@@ -373,8 +373,8 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
   #session-content { display: flex; flex-direction: column; }
   #new-hand-area { order: 1; } #editor-results { order: 2; } #session-content > .finance-card { order: 3; } #session-content > .night-actions { order: 4; }
   .night-summary { display: block; }
-  :not(.show-all-hands-open) > #editor-results .all-hands { display: none; }
-  .show-all-hands-open > #editor-results .all-hands { margin-top: 10px; }
+  body:not(.show-all-hands-open) .night-results .all-hands { display: none; }
+  .show-all-hands-open .night-results .all-hands { margin-top: 10px; }
 }
 /* PC: the table scrolls in its own box, with names on top and totals at the bottom. */
 @media (min-width: 701px) {
@@ -446,3 +446,38 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 /* In the table too: the cells of a player sitting out a hand are faded. */
 #editor-results .night td.sitting-out { color: #66808a; background: #121d23; }
 #editor-results .night td.sitting-out .running { opacity: .6; }
+
+/* Rounds: a thick line under the hand that completes a round; on phones a header per round. */
+.night tr.round-end td { border-bottom: 3px solid #4dc6a0; }
+.round-divider { margin: 6px 0 0; padding: 2px 4px; border-bottom: 2px solid #4dc6a0; color: #72d7b4; font-size: .78rem; font-weight: 700; }
+.recent-hands > .round-divider:first-child { margin-top: 0; }
+
+/* Who deals the hand: a yellow name, and a yellow edge on their cell in the table. */
+.recent-deltas .card-name.dealer, .players-summary .player-name.dealer { color: #f2c94c; font-weight: 800; }
+.night td.dealer { box-shadow: inset 3px 0 0 #f2c94c; }
+
+/* Hand cards: each player's change and score after the hand, lined up from card to card. */
+.recent-hands .recent-deltas { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 2px 10px; }
+.recent-deltas .card-player { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.recent-deltas .card-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-deltas .card-total { min-width: 2.2em; text-align: right; font-weight: 800; color: #eaf0f4; }
+/* The live view has nothing else on the page: its cards scroll with the page. */
+#live-scoreboard .recent-hands { max-height: none; overflow: visible; }
+
+/* Hand table cells: the bid and the numbers sit on one line; when the table would need a
+   sideways scrollbar (fit_table.html adds .stacked), the numbers go under the bid. */
+.night .cell-bid, .night .cell-nums { display: contents; }
+.night.stacked col.player-column { width: var(--stacked-column-width, 110px); }
+/* Stacked: the bid's short name on line one; tricks bid, tricks taken, change and score on line two. */
+.night .bid-short { display: none; }
+.night.stacked .bid-name { display: none; }
+.night.stacked .cell-line { display: grid; grid-template-columns: auto auto 1fr auto; grid-template-rows: 1.25em auto; column-gap: 3px; align-items: baseline; }
+.night.stacked .cell-bid, .night.stacked .cell-nums, .night.stacked .bid-label { display: contents; }
+.night.stacked .bid-short, .night.stacked .partner-mark, .night.stacked .cell-bid > .muted { display: block; grid-row: 1; grid-column: 1 / -1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.night.stacked .bid-target { grid-row: 2; grid-column: 1; font-weight: 700; }
+.night.stacked .actual { grid-row: 2; grid-column: 2; }
+.night.stacked .actual:before { margin-right: 1px; }
+.night.stacked .delta { grid-row: 2; grid-column: 3; justify-self: end; }
+.night.stacked .running { grid-row: 2; grid-column: 4; margin-left: 0; padding-left: 4px; }
+/* The live view keeps its own scroll position across refreshes (live_scoreboard.html). */
+#live-scoreboard { overflow-anchor: none; }

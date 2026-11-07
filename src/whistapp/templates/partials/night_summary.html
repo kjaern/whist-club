@@ -1,0 +1,63 @@
+{# Totals and every hand as compact cards, newest first: the phone view of a night, used in
+   Spiladministration (with Ret on each card) and in the live view. The full table is one tap away. #}
+{% from 'partials/marks.html' import dealer_class %}
+{% set names = {} %}{% for p in players %}{% set _ = names.update({p.id: p.name}) %}{% endfor %}
+  <div class="night-summary">
+    <div class="total-chips">
+      {% for p in players %}
+        <span class="total-chip{% if not p.active %} chip-inactive{% endif %}" style="background-color:{{score_colors[p.id]}}"><span>{{p.name}}{% if not p.active %} (gået){% endif %}</span><strong>{{totals[p.id]}}</strong></span>
+      {% endfor %}
+    </div>
+    {% if rows %}
+      <h3>Hænder · nyeste først</h3>
+      <div class="recent-hands">
+        {% for row in rows|reverse %}
+          {# Rounds are stored with each hand when it is saved (web.hand_round). #}
+          {% if row.round_no and (loop.first or row.round_end) %}
+            <div class="round-divider">Runde {{ row.round_no }}{% if loop.first and not row.round_end and round_progress %} · {{ round_progress[0] }} af {{ round_progress[1] }} har givet{% endif %}</div>
+          {% endif %}
+          <div class="recent-hand" data-hand="{{ row.hand.id }}">
+            <div class="recent-line">
+              <span class="hand-num">#{{row.number}}</span>
+              <span class="recent-bid">
+                {% if row.special_results %}
+                  <strong>{{row.hand.bid_label}}{% if row.hand.target %} {{row.hand.target}}{% endif %}</strong>
+                  {% for pid, result in row.special_results.items() %}{{ ' · ' if not loop.first else ' ' }}{{names[pid]}} <span class="actual">{{result.actual if result.actual is not none else '…'}}</span>{% endfor %}
+                {% else %}
+                  {{names[row.declarer] if row.declarer in names else '?'}} · <strong>{{row.hand.bid_label}}{% if row.hand.target %} {{row.hand.target}}{% endif %}</strong> <span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
+                  {% if row.partner and row.partner != row.declarer and row.partner in names %} · Makker {{names[row.partner]}}{% endif %}
+                {% endif %}
+              </span>
+              {% if hand_editor is defined %}{{ hand_editor(row) }}{% endif %}
+            </div>
+            <div class="recent-deltas">
+              {# Every player with their change and score after the hand; those sitting out greyed. #}
+              {% for p in players %}
+                <span class="card-player{% if p.id not in row.participants %} not-playing{% endif %}{{ dealer_class(row, p) }}">
+                  <span class="card-name{{ dealer_class(row, p) }}"{% if dealer_class(row, p) %} title="Giver"{% endif %}>{{p.name}}</span>
+                  {% if p.id in row.changes %}<span class="delta{% if row.changes[p.id].startswith('-') %} delta-negative{% elif row.changes[p.id]|float > 0 %} delta-positive{% endif %}">{{'+' if not row.changes[p.id].startswith('-') else ''}}{{row.changes[p.id]}}</span>{% else %}<span class="delta">–</span>{% endif %}
+                  <span class="card-total">{{row.totals[p.id]}}</span>
+                </span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+      <button type="button" class="secondary show-all-hands" aria-expanded="false" onclick="whistToggleAllHands()">Vis fuld tabel</button>
+    {% endif %}
+  </div>
+<script>
+// "Vis fuld tabel" is remembered on the page body, which refreshes never replace.
+window.whistShowAll = window.whistShowAll || false;
+function whistToggleAllHands() { window.whistShowAll = !window.whistShowAll; whistApplyShowAll(); }
+function whistApplyShowAll() {
+  document.body.classList.toggle('show-all-hands-open', window.whistShowAll);
+  document.querySelectorAll('.show-all-hands').forEach(button => {
+    button.setAttribute('aria-expanded', String(window.whistShowAll));
+    button.textContent = window.whistShowAll ? 'Skjul fuld tabel' : 'Vis fuld tabel';
+  });
+  // A table that was hidden could not be measured; fit it now it shows.
+  if (window.whistFitTables) window.whistFitTables();
+}
+whistApplyShowAll();
+</script>

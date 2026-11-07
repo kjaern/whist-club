@@ -91,6 +91,8 @@ def _club_rules_context(settings, form=None):
         rows.append({
             "key": bid.key,
             "label": "VIP" if bid.key == "vip" else bid.label,
+            "short": str(form.get(f"bid_short_{bid.key}")) if form is not None and form.get(f"bid_short_{bid.key}") is not None
+            else chosen.get("short", ""),
             "enabled": enabled,
             "options": [
                 {"field": f"bid_{bid.key}_{name}", "label": label,
@@ -129,6 +131,10 @@ def _club_amount(raw, label):
     return Fraction(text)
 
 
+# A short name for the compact hand table; the club's own text, kept short enough to fit.
+SHORT_NAME_MAX = 8
+
+
 def _parse_club_rules(form, settings):
     """Money mode, kr. per point and bid settings from the club form; absent fields keep their values."""
     money_mode = str(form.get("money_mode") or settings["money_mode"])
@@ -142,9 +148,15 @@ def _parse_club_rules(form, settings):
         order = {key: i for i, key in enumerate(_bid_order(bid_settings, form))}
         bid_settings = {}
         for bid in bid_classes():
+            label = "VIP" if bid.key == "vip" else bid.label
+            short = " ".join(str(form.get(f"bid_short_{bid.key}", "")).split())
+            if len(short) > SHORT_NAME_MAX:
+                raise ValueError(f"Kort navn for {label} må højst være {SHORT_NAME_MAX} tegn.")
             bid_settings[bid.key] = {
                 "order": order[bid.key],
                 "enabled": bool(form.get(f"bid_enabled_{bid.key}")),
+                # Empty or the normal name means no short name of its own.
+                **({"short": short} if short and short != label else {}),
                 "options": {
                     name: str(_club_amount(form.get(f"bid_{bid.key}_{name}", fmt(Fraction(str(default)))),
                                            f"{'VIP' if bid.key == 'vip' else bid.label}: {label}"))

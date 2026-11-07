@@ -1,0 +1,3 @@
+{# Who dealt the hand (stored with each live hand since rounds were added): their name is
+   shown in yellow, and in the table their cell has a yellow edge. #}
+{% macro dealer_class(row, p) %}{% if row.hand.dealer_id is not none and p.id == row.hand.dealer_id %} dealer{% endif %}{% endmacro %}

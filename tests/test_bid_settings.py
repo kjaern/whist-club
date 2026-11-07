@@ -223,3 +223,45 @@ def test_club_must_keep_at_least_one_bid(restore_club_rules):
         assert "Mindst én melding skal være slået til." in response.text
         with connect() as db:
             assert db.execute("SELECT money_mode FROM club_settings WHERE id=1").fetchone()[0] != "score_settle"
+
+
+def test_club_sets_short_bid_names_for_the_compact_table(restore_club_rules):
+    from whistapp.rules import bid_short_names
+    with TestClient(app) as client:
+        client.post("/login", data={"username": "admin", "password": "a$$word"})
+        with connect() as db:
+            form = _club_form(db, **_bid_fields(bid_short_almindelige=" Alm ", bid_short_vip="V", bid_short_sol="Sol"))
+        assert client.post("/club/save", data=form, follow_redirects=False).status_code == 303
+        with connect() as db:
+            bid_settings = json.loads(db.execute("SELECT bid_settings FROM club_settings WHERE id=1").fetchone()[0])
+        # Stored only where it differs from the normal name.
+        assert bid_settings["almindelige"]["short"] == "Alm" and bid_settings["vip"]["short"] == "V"
+        assert "short" not in bid_settings["sol"] and "short" not in bid_settings["halve"]
+        names = bid_short_names(bid_settings)
+        assert (names["almindelige"], names["vip2"], names["sol"], names["halve"]) == ("Alm", "V2", "Sol", "Halve")
+        page = client.get("/club").text
+        assert 'name="bid_short_almindelige" value="Alm" placeholder="Almindelige"' in page
+
+        # The hand table carries both names; the stacked table shows the short one.
+        created = client.post("/sessions", data={"title": "Korte navne", "guests": "A\nB\nC\nD"}, follow_redirects=False)
+        sid = int(created.headers["location"].split("/")[-1])
+        try:
+            with connect() as db:
+                players = [str(r[0]) for r in db.execute("SELECT id FROM players WHERE session_id=? ORDER BY id", (sid,))]
+            page = client.get(f"/sessions/{sid}").text
+            base = page.split('name="base_hand_id" value="')[1].split('"')[0]
+            client.post(f"/sessions/{sid}/hands", data={"bid_key": "almindelige", "target": "8", "declarer": players[0],
+                        "partner": players[2], "actual": "8", "participants": players, "base_hand_id": base})
+            for url in (f"/sessions/{sid}", f"/sessions/{sid}/live"):
+                html = client.get(url).text
+                assert '<span class="bid-name">Almindelige</span><span class="bid-short">Alm</span> <span class="bid-target">8</span>' in html
+        finally:
+            client.post(f"/sessions/{sid}/delete")
+
+        # Too long a short name is refused with a message, and nothing is saved.
+        with connect() as db:
+            form = _club_form(db, **_bid_fields(bid_short_halve="Halvmeldinger"))
+        refused = client.post("/club/save", data=form)
+        assert "Kort navn for Halve må højst være 8 tegn." in refused.text
+        with connect() as db:
+            assert "short" not in json.loads(db.execute("SELECT bid_settings FROM club_settings WHERE id=1").fetchone()[0])["halve"]

@@ -1,11 +1,18 @@
-<div id="live-scoreboard" {% if not session.ended_at %}hx-get="/sessions/{{session.id}}/live/scoreboard" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+{% from 'partials/marks.html' import dealer_class %}
+<div id="live-scoreboard" {% if not session.ended_at %}hx-get="/sessions/{{session.id}}/live/scoreboard?v={{ live_version|default('') }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
 <p><a href="/sessions/{{session.id}}/history">Ændringshistorik</a></p>
-<section class="card">
+<section class="card night-results">
   <h2>
     Løbende point
   </h2>
-  <div class="table-scroll">
-    {% set sizing = namespace(max_label=0, max_change=1) %}
+  {% include 'partials/night_summary.html' %}
+  <div class="table-scroll all-hands">
+    {% set sizing = namespace(max_label=0, max_change=1, max_short=0) %}
+    {% for short in bid_short.values() %}
+      {% if short|length > sizing.max_short %}
+        {% set sizing.max_short = short|length %}
+      {% endif %}
+    {% endfor %}
     {% for bid in rules.bids.values() %}
       {% if bid.label|length > sizing.max_label %}
         {% set sizing.max_label = bid.label|length %}
@@ -18,7 +25,7 @@
         {% endif %}
       {% endfor %}
     {% endfor %}
-    <table class="night" style="--player-column-width: {{ [190, (sizing.max_label + 4 + 4 + sizing.max_change) * 8 + 24]|max }}px">
+    <table class="night" style="--player-column-width: {{ [190, (sizing.max_label + 4 + 4 + sizing.max_change) * 8 + 24]|max }}px; --stacked-column-width: {{ [76, ([sizing.max_short + 1, sizing.max_change + 10]|max) * 7 + 12]|max }}px">
       <colgroup><col class="hand-column">
       {% for p in players %}
         <col class="player-column">
@@ -41,7 +48,7 @@
       </thead>
       <tbody>
         {% for row in rows %}
-          <tr class="score-row">
+          <tr class="score-row{% if row.round_end %} round-end{% endif %}" data-hand="{{ row.hand.id }}">
             <td class="hand-num">
               {{row.number}}
             </td>
@@ -52,29 +59,22 @@
               {% elif p.id not in row.participants %}
                 sitting-out
               {% endif %}
-              ">
-              <div class="cell-line">
+              {{ dealer_class(row, p) }}"{% if dealer_class(row, p) %} title="Giver"{% endif %}>
+              <div class="cell-line"><span class="cell-bid">
                 {% if p.id in row.special_results %}
-                  <span class="bid-label">{{row.hand.bid_label}}
-                  {% if row.hand.target %}
-                    {{row.hand.target}}
-                  {% endif %}
-                  </span><span class="actual">{{row.special_results[p.id].actual if row.special_results[p.id].actual is not none else '…'}}</span>
+                  <span class="bid-label"><span class="bid-name">{{row.hand.bid_label}}</span><span class="bid-short">{{ bid_short.get(row.hand.bid_key, row.hand.bid_label) }}</span>{% if row.hand.target %} <span class="bid-target">{{row.hand.target}}</span>{% endif %}</span><span class="actual">{{row.special_results[p.id].actual if row.special_results[p.id].actual is not none else '…'}}</span>
                 {% elif p.id==row.declarer %}
-                  <span class="bid-label">{{row.hand.bid_label}}
-                  {% if row.hand.target %}
-                    {{row.hand.target}}
-                  {% endif %}
-                  </span><span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
+                  <span class="bid-label"><span class="bid-name">{{row.hand.bid_label}}</span><span class="bid-short">{{ bid_short.get(row.hand.bid_key, row.hand.bid_label) }}</span>{% if row.hand.target %} <span class="bid-target">{{row.hand.target}}</span>{% endif %}</span><span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
                 {% elif p.id==row.partner and row.hand.actual is not none %}
                   <span class="partner-mark" title="Makker">M</span>
                 {% elif p.id not in row.participants %}
                   <span class="muted">–</span>
                 {% endif %}
+                </span><span class="cell-nums">
                 {% if p.id in row.changes %}
                   <span class="delta">{{'+' if not row.changes[p.id].startswith('-') else ''}}{{row.changes[p.id]}}</span>
                 {% endif %}
-                <span class="running">{{row.totals[p.id]}}</span>
+                <span class="running">{{row.totals[p.id]}}</span></span>
               </div>
             </td>
           {% endfor %}
@@ -95,6 +95,7 @@
     </tfoot>
   </table>
 </div>
+{% include 'partials/fit_table.html' %}
 </section>
 {% if session.ended_at and settled and show_live_settlement|default(true) %}
 <section class="card">
@@ -109,19 +110,30 @@
 {% endif %}
 </div>
 <script>
-  let savedTableScroll = 0;
-
-  document.body.addEventListener("htmx:beforeSwap", (event) => {
-    const table = document.querySelector(".table-scroll");
-    if (table && event.detail.target.contains(table)) {
-      savedTableScroll = table.scrollLeft;
-    }
+// A refresh replaces the whole scoreboard: keep the hand the reader was looking at in the
+// same place on screen (a new hand may have been added above it), and the table's sideways
+// scroll. Set up once; this script runs again with every refresh.
+if (!window.whistLiveScrollBound) {
+  window.whistLiveScrollBound = true;
+  let saved = null;
+  const visibleHand = () => [...document.querySelectorAll('#live-scoreboard [data-hand]')]
+    .find(el => el.offsetParent && el.getBoundingClientRect().bottom > 0);
+  const restore = () => {
+    if (!saved) return;
+    window.scrollTo(saved.x, saved.y);
+    const anchor = saved.hand && document.querySelector(`#live-scoreboard [data-hand="${saved.hand}"]`);
+    if (anchor && anchor.offsetParent) window.scrollBy(0, anchor.getBoundingClientRect().top - saved.top);
+    const table = document.querySelector('#live-scoreboard .table-scroll');
+    if (table) table.scrollLeft = saved.left;
+  };
+  document.body.addEventListener('htmx:beforeSwap', event => {
+    if (event.detail.target.id !== 'live-scoreboard') return;
+    const table = document.querySelector('#live-scoreboard .table-scroll');
+    const hand = window.scrollY > 0 ? visibleHand() : null;
+    saved = {x: window.scrollX, y: window.scrollY, left: table ? table.scrollLeft : 0,
+             hand: hand && hand.dataset.hand, top: hand ? hand.getBoundingClientRect().top : 0};
   });
-
-  document.body.addEventListener("htmx:afterSwap", (event) => {
-    const table = document.querySelector(".table-scroll");
-    if (table && event.detail.target.contains(table)) {
-      table.scrollLeft = savedTableScroll;
-    }
-  });
+  document.body.addEventListener('htmx:afterSwap', restore);
+  document.body.addEventListener('htmx:afterSettle', () => { restore(); saved = null; });
+}
 </script>

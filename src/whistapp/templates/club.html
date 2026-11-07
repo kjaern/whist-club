@@ -118,6 +118,7 @@
     <section class="card">
       <h2>Meldinger</h2>
       <p class="muted">Vælg hvilke meldinger klubben spiller, og deres værdier. Beregningen er den samme kode, som vises under “Vis regler”. Ændringer gælder for nye spilaftener.</p>
+      <p class="muted">Kort navn bruges i den smalle tabel over hænder; tomt betyder det normale navn. VIP får sit niveau bagefter, fx V1.</p>
       <p class="muted">Rækkefølgen er meldingernes indbyrdes rang, fra laveste til højeste. Den bruges i Ny hånd, Vis regler og statistikken. Flyt med ▲ og ▼.</p>
       <input type="hidden" name="bid_settings_form" value="1">
       <div class="bid-settings" id="bid-settings">
@@ -129,6 +130,9 @@
             <button type="button" class="secondary bid-down" aria-label="Flyt {{ bid.label }} ned">▼</button>
           </span>
           <label class="bid-toggle"><input type="checkbox" name="bid_enabled_{{ bid.key }}" value="1" {% if bid.enabled %}checked{% endif %}> {{ bid.label }}</label>
+          <label>Kort navn
+            <input name="bid_short_{{ bid.key }}" value="{{ bid.short }}" placeholder="{{ bid.label }}" maxlength="8">
+          </label>
           {% for option in bid.options %}
             <label>{{ option.label }}
               <input name="{{ option.field }}" value="{{ option.value }}" inputmode="decimal" required>

@@ -15,7 +15,7 @@ from html import escape
 from io import BytesIO
 
 from fastapi import APIRouter, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, StreamingResponse
 from whistapp.bids.registry import get_bid
 
 from .imports import _photo_list, _session_source_view, PHOTO_ROOT, SOURCE_ROOT
@@ -32,6 +32,7 @@ from ..web import (
     can_manage_club,
     fmt,
     get_session,
+    hand_round,
     night_time,
     render,
     require_open,
@@ -346,18 +347,34 @@ def session_history(request: Request, sid: int):
     return render(request, "session_history.html", session=session, operations=operations)
 
 
+LIVE_VERSION_MARK = "__live_version__"
+
+
+def _live_scoreboard(request, data):
+    """The live scoreboard and a fingerprint of it. The page polls with the fingerprint it
+    shows, and an unchanged scoreboard is answered with 204, so the page is not redrawn
+    (and does not jump) when nothing has happened."""
+    html = templates.get_template("partials/live_scoreboard.html").render(
+        request=request, live_version=LIVE_VERSION_MARK, **data)
+    version = hashlib.sha256(html.encode()).hexdigest()[:16]
+    return html.replace(LIVE_VERSION_MARK, version), version
+
+
 @router.get("/sessions/{sid}/live", response_class=HTMLResponse)
 def live_page(request: Request, sid: int):
     with connect() as db:
         data = view_data(db, sid)
-    return render(request, "live.html", **data)
+    return render(request, "live.html", live_version=_live_scoreboard(request, data)[1], **data)
 
 
 @router.get("/sessions/{sid}/live/scoreboard", response_class=HTMLResponse)
-def live_scoreboard(request: Request, sid: int):
+def live_scoreboard(request: Request, sid: int, v: str = ""):
     with connect() as db:
         data = view_data(db, sid)
-    return render(request, "partials/live_scoreboard.html", **data)
+    html, version = _live_scoreboard(request, data)
+    if v == version:
+        return Response(status_code=204)
+    return HTMLResponse(html)
 
 
 def _results_signature(sid: int) -> str:
@@ -624,8 +641,9 @@ async def create_hand(request: Request, sid: int):
         if not set(active) <= allowed:
             raise HTTPException(400, "Player not active in this session")
 
+        dealer, round_no, round_end = hand_round(db, sid, active)
         hid = db.execute(
-            "INSERT INTO hands(session_id,bid_key,bid_label,target,actual,won,contract_points,rules_snapshot,partner_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO hands(session_id,bid_key,bid_label,target,actual,won,contract_points,rules_snapshot,partner_id,dealer_id,round_no,round_end) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 sid,
                 key,
@@ -636,6 +654,9 @@ async def create_hand(request: Request, sid: int):
                 float(contract_points) if contract_points is not None else None,
                 rules_snapshot(bid),
                 partner,
+                dealer,
+                round_no,
+                round_end,
             ),
         ).lastrowid
 

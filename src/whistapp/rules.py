@@ -76,6 +76,21 @@ def enabled_bid_keys(bid_settings=None):
             if settings.get(bids[key].key, {}).get("enabled", True)]
 
 
+def bid_short_names(bid_settings=None):
+    """Each bid key's short name for the compact hand table: the club's own, per bid type
+    (VIP followed by its level), else the bid's normal name. Display only, so a change
+    shows on every night at once."""
+    settings = bid_settings or {}
+    names = {}
+    for key, bid in registered_bids().items():
+        short = str(settings.get(bid.key, {}).get("short") or "").strip()
+        if key.startswith("vip"):
+            names[key] = (short or "VIP") + key[-1]
+        else:
+            names[key] = short or bid.label
+    return names
+
+
 def rules_snapshot(bid):
     """JSON for hands.rules_snapshot; exact Fractions are stored as text like '3/2'."""
     return json.dumps(bid, ensure_ascii=False, default=str)

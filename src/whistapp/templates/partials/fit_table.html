@@ -1,0 +1,19 @@
+<script>
+// The hand table: as soon as it would need a sideways scrollbar, every cell puts its numbers
+// under the bid, which makes the columns much narrower. The one-line width is worked out
+// from the column widths, never by laying the table out on one line to measure it: that
+// briefly changed the page's height and made the live view jump on every refresh.
+window.whistFitTables = window.whistFitTables || function () {
+  document.querySelectorAll('.table-scroll > table.night').forEach(table => {
+    const box = table.parentElement;
+    if (!box.clientWidth) return;  // hidden, e.g. on a phone before "Vis fuld tabel"
+    const player = parseFloat(table.style.getPropertyValue('--player-column-width')) || 220;
+    const oneLine = [...table.querySelectorAll('col')].reduce((width, col) =>
+      width + (col.classList.contains('player-column') ? player
+        : col.classList.contains('edit-column') ? 55 : 42), 0);
+    table.classList.toggle('stacked', oneLine > box.clientWidth + 1);
+  });
+};
+if (!window.whistFitBound) { window.whistFitBound = true; window.addEventListener('resize', () => window.whistFitTables()); }
+window.whistFitTables();
+</script>

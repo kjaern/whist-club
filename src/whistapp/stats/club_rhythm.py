@@ -11,7 +11,7 @@ class ClubRhythm(Statistic):
     title = "Klubbens rytme"
     topic = "rekorder"
     description = "Gennemsnit pr. spilaften med klubmedlemmer i perioden."
-    scopes = ("all", "year")
+    scopes = ("all", "year", "period")
 
     def compute(self, data):
         nights = data.nights_with_members()

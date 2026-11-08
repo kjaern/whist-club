@@ -257,6 +257,17 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 
 /* Statistics: scope links, topic tabs, and tables that scroll with a fixed first column. */
 .stats-scope { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin: 0 0 12px; }
+/* Small inline controls under the scope links: the period between two dates, then live/imported. */
+.stats-compact { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; }
+.stats-compact label { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+.stats-compact-label { color: #aabcc5; font-size: .85rem; min-width: 5.2em; }
+.stats-compact input, .stats-compact select { font-size: .85rem; padding: 4px 6px; border-radius: 6px; }
+.stats-compact button.secondary { padding: 5px 10px; }
+@media (pointer:coarse) { .stats-compact input, .stats-compact select { font-size: 16px; } } /* no zoom on focus */
+@media (max-width:500px) {
+  .stats-period .stats-compact-label { flex-basis: 100%; }
+  .stats-period input[type=date] { flex: 1 1 0; }
+}
 .stats-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 4px; }
 .stats-tabs a { background: #2b414b; color: #eaf0f4; text-decoration: none; font-weight: 700; padding: 8px 12px; border-radius: 8px; }
 .stats-tabs a.active { background: #3a9a7c; color: #fff; }

@@ -53,4 +53,4 @@ def test_club_rhythm(tmp_path, monkeypatch):
     assert [(r['what'], r['value']) for r in rows] == [
         ('Spilaftener', '2'), ('Hænder pr. aften', '4'), ('Selvmakker pr. aften', '1'),
         ('Sol, Ren sol og Bordlægger pr. aften', '1'), ('Dage mellem aftener', '365')]
-    assert ClubRhythm.scopes == ('all', 'year')  # a single night has no rhythm
+    assert ClubRhythm.scopes == ('all', 'year', 'period')  # a single night has no rhythm

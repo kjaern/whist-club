@@ -190,14 +190,33 @@ def _statistics_page(request, db, scope, topic, **context):
 
 
 @router.get("/statistics", response_class=HTMLResponse)
-def statistics(request: Request, origin: str = "all", topic: str = ""):
+def statistics(request: Request, origin: str = "all", topic: str = "", fra: str = "", til: str = ""):
     if origin not in ("all", "live", "imported"):
         raise HTTPException(400, "Invalid origin")
+    if fra or til:
+        return _statistics_period(request, origin, topic, fra, til)
     with connect() as db:
         nights = load(db, Scope(origin=origin)).nights_with_members()
         years = Counter(n.year for n in nights)
         return _statistics_page(request, db, Scope(origin=origin), topic,
                                 years=sorted(years.items(), reverse=True))
+
+
+def _statistics_period(request, origin, topic, fra, til):
+    """Statistics for the nights between two dates, both included; either end may be open."""
+    try:
+        start, end = (date.fromisoformat(v).isoformat() if v else None for v in (fra, til))
+    except ValueError:
+        raise HTTPException(400, "Ugyldig dato")
+    if start and end and start > end:
+        start, end = end, start
+    scope = Scope("period", origin=origin, date_from=start, date_to=end)
+    with connect() as db:
+        data = load(db, scope)
+        hands = Counter(h.session_id for h in data.hands)
+        nights = [dict(id=n.id, title=n.title, date=n.date, hand_count=hands[n.id])
+                  for n in sorted(data.nights_with_members(), key=lambda n: (n.date, n.id), reverse=True)]
+        return _statistics_page(request, db, scope, topic, nights=nights)
 
 
 def _check_year(year, origin):

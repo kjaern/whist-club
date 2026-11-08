@@ -172,8 +172,8 @@ def has_first(label):
     return label.split("/")[0] == "1"
 
 
-def king(data, results, year):
-    title = "Tidernes konge" if year is None else "Årets konge"
+def king(data, results, year, period=""):
+    title = "Periodens konge" if period else "Tidernes konge" if year is None else "Årets konge"
     award = Award(
         "konge", "👑", title, "Kronen går til den, der oftest ender foran de andre.",
         "Gennemsnitlig placeringsscore over aftenerne, som på Placeringer: hver aften er en lille kamp mod "
@@ -496,19 +496,21 @@ class HallOfFame:
     nights: int  # finished nights with results in the period
     awards: list
     records: list  # (label, Award)
+    period: str = ""  # a period between two dates, as Danish text
 
     def award(self, key):
         return next(a for a in self.awards if a.key == key)
 
 
 def compute(data):
-    """Every award for a loaded lifetime or year scope (StatsData). No database access."""
+    """Every award for a loaded lifetime, year or period scope (StatsData). No database access."""
     year = data.scope.year if data.scope.kind == "year" else None
+    period = data.scope.period_text() if data.scope.kind == "period" else ""
     data = finished(data)
     results = night_results(data)
     counts = bid_counts(data)
     awards = [
-        king(data, results, year),
+        king(data, results, year, period),
         most_wins(data, results),
         win_streak(data, results),
         form(data, results),
@@ -523,5 +525,5 @@ def compute(data):
         yoyo(data, results),
     ]
     by_key = {a.key: a for a in awards}
-    return HallOfFame(year, len(results), awards, [(label, by_key[key]) for key, label in RECORDS])
+    return HallOfFame(year, len(results), awards, [(label, by_key[key]) for key, label in RECORDS], period)
 

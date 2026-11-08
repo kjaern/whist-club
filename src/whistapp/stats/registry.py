@@ -25,7 +25,7 @@ TOPICS = [
     Topic("rekorder", "Rekorder", [Streaks(), Extremes(), ClubRhythm()]),
     Topic("placeringer", "Placeringer", [Placements(), NightGrid()]),
     # Club titles and records, computed by hall_of_fame.py rather than as tables.
-    Topic("hall-of-fame", "🏆 Hall of Fame", scopes=("all", "year"),
+    Topic("hall-of-fame", "🏆 Hall of Fame", scopes=("all", "year", "period"),
           page="partials/hall_of_fame.html", build=hall_of_fame.compute),
 ]
 

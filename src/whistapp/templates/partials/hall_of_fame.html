@@ -4,8 +4,8 @@
   <p>Whistkongernes helte, syndebukke og legender</p>
 </section>
 <p class="muted">
-  {% if hof.nights %}Bygger på {{ hof.nights }} afsluttede klubaftener{% if hof.year %} i {{ hof.year }}{% endif %}. Kun aftener, man selv spillede, tæller for en spiller.
-  {% else %}Ingen afsluttede klubaftener {% if hof.year %}i {{ hof.year }}{% else %}endnu{% endif %}, så alle titler er ledige.{% endif %}
+  {% if hof.nights %}Bygger på {{ hof.nights }} afsluttede klubaftener{% if hof.year %} i {{ hof.year }}{% elif hof.period %} i perioden {{ hof.period }}{% endif %}. Kun aftener, man selv spillede, tæller for en spiller.
+  {% else %}Ingen afsluttede klubaftener {% if hof.year %}i {{ hof.year }}{% elif hof.period %}i perioden {{ hof.period }}{% else %}endnu{% endif %}, så alle titler er ledige.{% endif %}
 </p>
 
 <div class="hof-grid">
@@ -41,7 +41,7 @@
 </div>
 
 <section class="card hof-records">
-  <h2>🏆 Klubrekorder{% if hof.year %} · {{ hof.year }}{% endif %}</h2>
+  <h2>🏆 Klubrekorder{% if hof.year %} · {{ hof.year }}{% elif hof.period %} · {{ hof.period }}{% endif %}</h2>
   <dl>
     {% for label, award in hof.records %}
       <div>

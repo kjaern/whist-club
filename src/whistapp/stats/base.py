@@ -67,7 +67,7 @@ class Statistic:
     title = ""
     topic = ""
     description = ""
-    scopes = ("all", "year", "night")
+    scopes = ("all", "year", "period", "night")
 
     def compute(self, data):
         raise NotImplementedError

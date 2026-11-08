@@ -1,6 +1,7 @@
 """Graphs for a table's columns: the same statistic computed for each period one level down.
 
-The club's lifetime is graphed year by year, a year night by night; a night has no graph.
+The club's lifetime is graphed year by year, a year night by night; a period between two
+dates by year when it spans several years, else night by night; a night has no graph.
 Each row of the table (a member, a pair, a bid) is one line, followed through the periods
 by the text of its first column. A statistic that does not make sense for the smaller
 period (fx Aftener, which is itself night by night) gets no graphs.
@@ -14,9 +15,17 @@ from .base import Cell
 SUB_KIND = {"all": "year", "year": "night"}
 
 
+def sub_kind(data):
+    """The period one level down; a period between two dates goes by year when it spans
+    several years, else night by night."""
+    if data.scope.kind == "period":
+        return "year" if len(data.years()) > 1 else "night"
+    return SUB_KIND.get(data.scope.kind)
+
+
 def periods(data):
     """(x label, tooltip title, StatsData) per period inside the scope, oldest first."""
-    kind = SUB_KIND.get(data.scope.kind)
+    kind = sub_kind(data)
     if kind == "year":
         return [(year, year, replace(data.for_year(year), scope=replace(data.scope, kind="year", year=int(year))))
                 for year in sorted(data.years())]
@@ -48,7 +57,7 @@ def label(value):
 def trend(stat, table, data, sub_periods=None):
     """{x, titles, columns: {key: {label, fmt, series: [{name, values, total}]}}}, or None."""
     sub_periods = periods(data) if sub_periods is None else sub_periods
-    if SUB_KIND.get(data.scope.kind) not in stat.scopes or len(sub_periods) < 2 or not table.columns:
+    if sub_kind(data) not in stat.scopes or len(sub_periods) < 2 or not table.columns:
         return None
     first = table.columns[0].key
     tables = [stat.compute(period) for _x, _title, period in sub_periods]
@@ -90,4 +99,4 @@ def trend(stat, table, data, sub_periods=None):
     if not columns:
         return None
     return dict(x=[x for x, _t, _d in sub_periods], titles=[t for _x, t, _d in sub_periods],
-                columns=columns, per="år" if data.scope.kind == "all" else "aften")
+                columns=columns, per="år" if sub_kind(data) == "year" else "aften")

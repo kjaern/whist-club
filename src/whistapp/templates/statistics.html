@@ -3,18 +3,23 @@
   {% if scope.kind == 'night' %}
     {% set base_url = '/sessions/' ~ session.id ~ '/statistics' %}
     {% set query = '' %}
+  {% elif scope.kind == 'period' %}
+    {% set base_url = '/statistics' %}
+    {% set query = 'origin=' ~ origin ~ '&fra=' ~ (scope.date_from or '') ~ '&til=' ~ (scope.date_to or '') ~ '&' %}
   {% else %}
     {% set base_url = '/statistics' if scope.kind == 'all' else '/statistics/' ~ scope.year %}
     {% set query = 'origin=' ~ origin ~ '&' %}
   {% endif %}
   <h1>
-    {% if scope.kind == 'all' %}Klubstatistik{% elif scope.kind == 'year' %}Klubstatistik · {{ scope.year }}{% else %}Statistik · {{ night_date }} · {{ session.title }}{% endif %}
+    {% if scope.kind == 'all' %}Klubstatistik{% elif scope.kind == 'year' %}Klubstatistik · {{ scope.year }}{% elif scope.kind == 'period' %}Klubstatistik · {{ scope.period_text() }}{% else %}Statistik · {{ night_date }} · {{ session.title }}{% endif %}
   </h1>
   <nav class="stats-scope">
     {% if scope.kind == 'all' %}
       {% for year, count in years %}
         <a href="/statistics/{{ year }}?origin={{ origin }}&topic={{ topic.key }}">{{ year }}</a><span class="muted">{{ count }} aftener</span>
       {% endfor %}
+    {% elif scope.kind == 'period' %}
+      <a href="/statistics?origin={{ origin }}&topic={{ topic.key }}">← Alle år</a>
     {% elif scope.kind == 'year' %}
       <a href="/statistics?origin={{ origin }}&topic={{ topic.key }}">← Alle år</a>
       {% if nights %}<a href="/statistics/{{ scope.year }}/export.xlsx?origin={{ origin }}">Eksportér året som Excel</a>{% endif %}
@@ -24,9 +29,26 @@
     {% endif %}
   </nav>
   {% if scope.kind != 'night' %}
-    <form method="get" action="{{ base_url }}">
+    {# The time choice: years above, a period between two dates here (shown on /statistics);
+       on a year page the period starts as the year. #}
+    {% set fra = scope.date_from or (scope.year ~ '-01-01' if scope.kind == 'year' else '') %}
+    {% set til = scope.date_to or (scope.year ~ '-12-31' if scope.kind == 'year' else '') %}
+    <form method="get" action="/statistics" class="stats-compact stats-period">
+      <input type="hidden" name="origin" value="{{ origin }}">
       <input type="hidden" name="topic" value="{{ topic.key }}">
-      <label>Spilaftener <select name="origin" onchange="this.form.submit()">
+      <span class="stats-compact-label">Periode</span>
+      <input type="date" name="fra" value="{{ fra }}" aria-label="Fra dato">
+      <span aria-hidden="true">–</span>
+      <input type="date" name="til" value="{{ til }}" aria-label="Til dato">
+      <button type="submit" class="secondary">Vis</button>
+    </form>
+    <form method="get" action="{{ base_url }}" class="stats-compact">
+      <input type="hidden" name="topic" value="{{ topic.key }}">
+      {% if scope.kind == 'period' %}
+        <input type="hidden" name="fra" value="{{ scope.date_from or '' }}">
+        <input type="hidden" name="til" value="{{ scope.date_to or '' }}">
+      {% endif %}
+      <label><span class="stats-compact-label">Spilaftener</span> <select name="origin" onchange="this.form.submit()">
         <option value="all" {{ 'selected' if origin == 'all' else '' }}>Alle</option>
         <option value="live" {{ 'selected' if origin == 'live' else '' }}>Live</option>
         <option value="imported" {{ 'selected' if origin == 'imported' else '' }}>Importerede</option>
@@ -59,6 +81,15 @@
         <p><a href="/sessions/{{ night.id }}/statistics?topic={{ topic.key }}">{{ night.date }} · {{ night.title }}</a> <span class="muted">· {{ night.hand_count }} hænder</span></p>
       {% else %}
         <p>Ingen klubspilaftener med registrerede hænder i {{ scope.year }}.</p>
+      {% endfor %}
+    </section>
+  {% elif scope.kind == 'period' %}
+    <section class="card">
+      <h2>Spilaftener i perioden</h2>
+      {% for night in nights %}
+        <p><a href="/sessions/{{ night.id }}/statistics?topic={{ topic.key }}">{{ night.date }} · {{ night.title }}</a> <span class="muted">· {{ night.hand_count }} hænder</span></p>
+      {% else %}
+        <p>Ingen klubspilaftener med registrerede hænder i perioden.</p>
       {% endfor %}
     </section>
   {% endif %}

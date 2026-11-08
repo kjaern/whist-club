@@ -1,4 +1,4 @@
-"""Load one statistics scope (the club's lifetime, a year or a night) into plain records.
+"""Load one statistics scope (the club's lifetime, a year, a period between two dates or a night) into plain records.
 
 Statistics never query the database themselves: they receive a StatsData and compute
 from its hands and nights. Scores stay Fractions; formatting happens at display time.
@@ -12,7 +12,7 @@ from fractions import Fraction
 from ..club import active_club_id, club_players, club_settings
 from ..rule_versions import night_rules
 
-KINDS = ("all", "year", "night")
+KINDS = ("all", "year", "period", "night")
 ORIGINS = ("all", "live", "imported")
 
 
@@ -22,10 +22,21 @@ class Scope:
     year: int | None = None
     session_id: int | None = None
     origin: str = "all"
+    date_from: str | None = None  # period: ISO dates, both included; None leaves that end open
+    date_to: str | None = None
 
     def __post_init__(self):
         if self.kind not in KINDS or self.origin not in ORIGINS:
             raise ValueError("Invalid statistics scope")
+
+    def period_text(self):
+        """The period in Danish dates, fx "1/3/2026 – 30/6/2026"; an open end is left blank."""
+        def day(value):
+            if not value:
+                return ""
+            year, month, dom = value.split("-")
+            return f"{int(dom)}/{int(month)}/{year}"
+        return f"{day(self.date_from)} – {day(self.date_to)}".strip()
 
 
 @dataclass
@@ -131,6 +142,12 @@ def load(db, scope, roster=None):
     elif scope.kind == "night":
         where += " AND s.id=?"
         args.append(scope.session_id)
+    elif scope.kind == "period":
+        # By the night's displayed (Danish) date, which can differ from the stored UTC one.
+        ids = [r["id"] for r in db.execute(f"SELECT s.* FROM sessions s WHERE {where}", args)
+               if (scope.date_from or "") <= night_time(r)[:10] <= (scope.date_to or "9999")]
+        where += f" AND s.id IN ({','.join('?' * len(ids)) or 'NULL'})"
+        args.extend(ids)
 
     nights = {}
     for r in db.execute(

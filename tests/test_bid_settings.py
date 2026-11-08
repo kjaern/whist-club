@@ -56,8 +56,7 @@ def test_configured_values_reach_each_bid():
 
 def _night(db, scores, money_mode="placement"):
     """A finished-looking club night with one hand; returns (session id, member ids)."""
-    sid = db.execute("INSERT INTO sessions(title,is_club,club_id,money_mode,point_rate) VALUES ('Penge',1,1,?,'1')",
-                     (money_mode,)).lastrowid
+    sid = db.execute("INSERT INTO sessions(title,is_club,club_id) VALUES ('Penge',1,1)").lastrowid
     members, players = [], []
     for i, score in enumerate(scores):
         mid = db.execute("INSERT INTO club_members(name,status,club_id) VALUES (?,'paused',1)",

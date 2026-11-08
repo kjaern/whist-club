@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from whistapp import database
+from whistapp.rule_versions import stamp_night
 from whistapp.database import connect, init_db
 from whistapp.main import app
 
@@ -48,6 +49,7 @@ def test_member_creates_club_and_chooses_between_clubs(cleanup_clubs):
         with connect() as db:
             first_club_night = db.execute(
                 "INSERT INTO sessions(title,club_id) VALUES ('Klub 1 aften',1)").lastrowid
+            stamp_night(db, first_club_night)
 
         with TestClient(app) as founder:
             password = _activate(founder, "founder", temporary)

@@ -11,7 +11,7 @@ import pytest
 import whistapp.database as database
 from whistapp.database import connect, init_db
 from whistapp.finance import settlement_entries
-from whistapp.rule_versions import is_club_night, night_rules, stamp_night
+from whistapp.rule_versions import is_club_night, night_rules, save_version, stamp_night
 
 RATES = [50, 75, 125, 200, 250]  # five placement payments for five active members
 
@@ -25,6 +25,7 @@ def club_night(tmp_path, monkeypatch):
         db.execute("INSERT INTO club_settings(id,placements,fejl40) VALUES (?,?,40)", (club, json.dumps(RATES)))
         members = [db.execute("INSERT INTO club_members(name,status,club_id) VALUES (?,?,?)",
                               (f"M{i}", "active" if i < 5 else "paused", club)).lastrowid for i in range(6)]
+        save_version(db, club)  # as Klubadministration would
         sid = db.execute("INSERT INTO sessions(title,is_club,club_id) VALUES ('Aften',1,?)", (club,)).lastrowid
         stamp_night(db, sid)
         for seat, mid in enumerate(members[:4]):

@@ -24,7 +24,7 @@ from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
 from ..finance import export_workbook, export_year_workbook, settlement_entries
-from ..rule_versions import current_version_id, get_version, is_club_night, night_rules, stamp_night
+from ..rule_versions import is_club_night, latest_version, night_rules, stamp_night
 from .rules import version_name
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from ..stats.base import cell as stat_cell
@@ -85,9 +85,9 @@ def home(request: Request):
 
 
 def _current_rules(db):
-    """The version a night created now is played under, for the new-night form."""
-    version_id = current_version_id(db, active_club_id())
-    version = version_id and get_version(db, version_id)
+    """The club's newest version, for the new-night form. Only read: a version is made when
+    rules are saved or a night is created, never by opening a page."""
+    version = latest_version(db, active_club_id())
     return version and dict(number=version["number"], name=version_name(version))
 
 
@@ -101,7 +101,6 @@ async def create_session(request: Request):
 
     with connect() as db:
         roster = dict(club_players(db, active_only=True))
-        defaults = club_settings(db)
 
     selected = [str(v) for v in form.getlist("club_players")]
     if len(set(selected)) != len(selected) or not set(selected) <= set(roster):
@@ -128,21 +127,9 @@ async def create_session(request: Request):
     is_club = int(not guests)
     with connect() as db:
         sid = db.execute(
-            """INSERT INTO sessions(title,rotation_mode,is_club,placement_rates,fejl40_rate,club_id,
-                money_mode,point_rate,bid_settings,server_version,server_commit)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                title,
-                rotation_mode,
-                is_club,
-                defaults["placements"] if is_club else None,
-                defaults["fejl40"] if is_club else None,
-                active_club_id(),
-                defaults["money_mode"],
-                defaults["point_rate"],
-                defaults["bid_settings"],
-                *build_stamp(),
-            ),
+            """INSERT INTO sessions(title,rotation_mode,is_club,club_id,server_version,server_commit)
+                VALUES (?,?,?,?,?,?)""",
+            (title, rotation_mode, is_club, active_club_id(), *build_stamp()),
         ).lastrowid
         db.executemany(
             "INSERT INTO players(session_id,name,club_id,member_id,seat_order) VALUES (?,?,?,?,?)",

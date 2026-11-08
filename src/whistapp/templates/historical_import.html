@@ -79,8 +79,8 @@
 </select></label></div>
 {% endfor %}
 <label>Brug regler<select name="rule_version">
-<option value="">Reglerne på aftenens dato</option>
-{% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string %}selected{% endif %}>{{v.name}}</option>{% endfor %}
+{# The current version first and suggested; any earlier one can be chosen. #}
+{% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string or (not rule_version|default('') and loop.first) %}selected{% endif %}>{{v.name}}{% if loop.first %} (nuværende){% endif %}</option>{% endfor %}
 </select></label>
 <label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
 <button type="submit">Gem slutresultater</button>
@@ -363,8 +363,8 @@ fetch('/import/ai/staged/{{ai_artifacts.token}}/transcription.json')
 {% endfor %}
 </div>
 <label>Brug regler<select name="rule_version">
-<option value="">Reglerne på aftenens dato</option>
-{% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string %}selected{% endif %}>{{v.name}}</option>{% endfor %}
+{# The current version first and suggested; any earlier one can be chosen. #}
+{% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string or (not rule_version|default('') and loop.first) %}selected{% endif %}>{{v.name}}{% if loop.first %} (nuværende){% endif %}</option>{% endfor %}
 </select></label>
 <label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
 <label>Ret en tidligere import (valgfrit)<select name="replace_id">

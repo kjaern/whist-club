@@ -1,3 +1,4 @@
+from whistapp.rule_versions import stamp_night
 from whistapp.statistics import club_statistics
 from whistapp.database import init_db, connect
 
@@ -8,6 +9,7 @@ def test_statistics_years_and_self_partner(tmp_path, monkeypatch):
     init_db()
     with connect() as db:
         db.execute("INSERT INTO sessions(id,title,created_at,is_club) VALUES(1,'Night','2026-10-01 12:00:00',1)")
+        stamp_night(db, 1)
         db.executemany('INSERT INTO club_members(id,name) VALUES(?,?)',
                        [(1,'A'),(2,'B'),(3,'C'),(4,'D'),(5,'E')])
         db.executemany('INSERT INTO players(id,session_id,name,member_id) VALUES(?,?,?,?)',
@@ -33,6 +35,7 @@ def test_statistics_scoped_to_one_night(tmp_path, monkeypatch):
     with connect() as db:
         db.executemany("INSERT INTO sessions(id,title,created_at,is_club) VALUES(?,?,?,1)",
                        [(1,'First','2026-01-01 12:00:00'),(2,'Second','2026-02-01 12:00:00')])
+        stamp_night(db, 1); stamp_night(db, 2)
         db.execute("INSERT INTO club_members(id,name) VALUES(1,'A')")
         db.executemany('INSERT INTO players(id,session_id,name,member_id) VALUES(?,?,?,?)',
                        [(1,1,'A',1),(2,2,'A',1)])

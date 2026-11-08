@@ -1,4 +1,4 @@
-"""Versioned club rules: each night points to the rules and medlemsliste it was played under."""
+"""Versioned club rules: one active version per club, made only by a club administrator."""
 import json
 
 import pytest
@@ -7,11 +7,10 @@ from fastapi.testclient import TestClient
 import whistapp.database as database
 from whistapp.database import connect, init_db
 from whistapp.main import app
-from whistapp.rule_versions import current_version_id, get_version, latest_version
+from whistapp.rule_versions import get_version, latest_version, night_rules, save_version, stamp_night
 from test_bid_settings import _bid_fields, _club_form, restore_club_rules  # noqa: F401
 
 FIVE = json.dumps([50, 75, 125, 200, 250])
-FOUR = json.dumps([50, 75, 125, 200])
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +20,7 @@ def _shared_home():
 
 @pytest.fixture
 def own_db(tmp_path, monkeypatch):
-    """A private database, so migration is tested from a known starting point."""
+    """A private, brand-new database with a second club of five active and one paused member."""
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "versions.db")
     init_db()
     with connect() as db:
@@ -32,104 +31,57 @@ def own_db(tmp_path, monkeypatch):
     return club, members
 
 
-def _night(db, club, placements=FIVE, created="2026-01-01 19:00:00", bid_settings="{}", **extra):
-    sid = db.execute("""INSERT INTO sessions(title,club_id,is_club,created_at,placement_rates,fejl40_rate,
-        money_mode,point_rate,bid_settings) VALUES ('Aften',?,1,?,?,40,'placement','1',?)""",
-                     (club, created, placements, bid_settings)).lastrowid
-    for column, value in extra.items():
-        db.execute(f"UPDATE sessions SET {column}=? WHERE id=?", (value, sid))
-    return sid
-
-
-def _settle(db, sid, member_ids):
-    db.executemany("""INSERT INTO club_member_settlements(session_id,member_id,place,amount_numerator,amount_denominator)
-        VALUES (?,?,1,0,1)""", [(sid, m) for m in member_ids])
-
-
 def _version_of(db, sid):
     return get_version(db, db.execute("SELECT rule_version_id FROM sessions WHERE id=?", (sid,)).fetchone()[0])
 
 
-def test_migration_groups_nights_by_their_own_rules_and_medlemsliste(own_db):
-    club, members = own_db
+def test_a_new_database_starts_the_first_club_on_version_1(own_db):
     with connect() as db:
-        db.execute("UPDATE sessions SET rule_version_id=NULL")
-        db.execute("DELETE FROM club_rule_versions")
-        a1 = _night(db, club, created="2025-01-01 19:00:00")
-        a2 = _night(db, club, created="2025-02-01 19:00:00")
-        _settle(db, a1, members[:5])
-        _settle(db, a2, members[:5])
-        # A night where member 5 was on the list and member 0 was not.
-        b = _night(db, club, created="2025-03-01 19:00:00")
-        _settle(db, b, members[1:6])
-        # Fewer placements: a different version even with the same members table.
-        c = _night(db, club, placements=FOUR, created="2025-04-01 19:00:00")
-        _settle(db, c, members[:4])
-    init_db()
+        first = latest_version(db, 1)
+        assert first["number"] == 1 and first["created_by"] == "opsætning"
+    init_db()  # starting again makes nothing new
     with connect() as db:
-        va1, va2, vb, vc = (_version_of(db, s) for s in (a1, a2, b, c))
-        assert va1["id"] == va2["id"]
-        assert json.loads(va1["member_ids"]) == members[:5]
-        assert json.loads(vb["member_ids"]) == members[1:6] and vb["id"] != va1["id"]
-        assert json.loads(vc["placements"]) == [50, 75, 125, 200] and json.loads(vc["member_ids"]) == members[:4]
-        # Numbered in the order the nights were played, made by the migration.
-        assert [va1["number"], vb["number"], vc["number"]] == [1, 2, 3]
-        assert va1["created_by"] == "migrering" and va1["created_at"] == "2025-01-01 19:00:00"
-        # Today's settings and active members differ from version 3, so the club gets a current version.
-        assert latest_version(db, club)["number"] == 4
-        assert json.loads(latest_version(db, club)["member_ids"]) == members[:5]
-        before = db.execute("SELECT COUNT(*) FROM club_rule_versions").fetchone()[0]
-        links = db.execute("SELECT id,rule_version_id FROM sessions ORDER BY id").fetchall()
-    init_db()  # running the migration again changes nothing
-    with connect() as db:
-        assert db.execute("SELECT COUNT(*) FROM club_rule_versions").fetchone()[0] == before
-        assert db.execute("SELECT id,rule_version_id FROM sessions ORDER BY id").fetchall() == links
-
-
-def test_migration_fills_what_a_night_never_recorded_from_current_rules(own_db):
-    club, members = own_db
-    with connect() as db:
-        sid = _night(db, club)
-        db.execute("""UPDATE sessions SET rule_version_id=NULL,placement_rates=NULL,fejl40_rate=NULL,
-            money_mode=NULL,point_rate=NULL,bid_settings=NULL WHERE id=?""", (sid,))
-    init_db()
-    with connect() as db:
-        version = _version_of(db, sid)
-        assert version["id"] == latest_version(db, club)["id"]  # exactly the current rules
-        assert json.loads(version["placements"]) == json.loads(FIVE) and version["fejl40"] == 40
-        assert version["money_mode"] == "placement" and json.loads(version["member_ids"]) == members[:5]
-
-
-def test_unsettled_night_borrows_the_nearest_matching_medlemsliste(own_db):
-    club, members = own_db
-    with connect() as db:
-        db.execute("DELETE FROM club_rule_versions")
-        settled = _night(db, club, created="2025-01-01 19:00:00")
-        _settle(db, settled, members[1:6])
-        open_night = _night(db, club, created="2025-02-01 19:00:00")
-        db.execute("INSERT INTO players(session_id,name,member_id,seat_order) VALUES (?,?,?,0)",
-                   (open_night, "M5", members[5]))
-        db.execute("UPDATE sessions SET rule_version_id=NULL")
-    init_db()
-    with connect() as db:
-        assert _version_of(db, open_night)["id"] == _version_of(db, settled)["id"]
+        assert db.execute("SELECT COUNT(*) FROM club_rule_versions WHERE club_id=1").fetchone()[0] == 1
 
 
 def test_new_version_only_when_rules_or_medlemsliste_change(own_db):
     club, members = own_db
     with connect() as db:
-        first = current_version_id(db, club)
+        first = save_version(db, club)
         db.execute("UPDATE club_members SET name='Nyt navn' WHERE id=?", (members[0],))
         db.execute("UPDATE club_settings SET allow_ai_import=1, ai_notes='noter' WHERE id=?", (club,))
-        assert current_version_id(db, club) == first  # names and non-rule settings are not rules
+        assert save_version(db, club) == first  # names and non-rule settings are not rules
         db.execute("UPDATE club_members SET status='active' WHERE id=?", (members[5],))
         db.execute("UPDATE club_settings SET placements=? WHERE id=?", (json.dumps([1, 2, 3, 4, 5, 6]), club))
-        second = current_version_id(db, club)
+        second = save_version(db, club)
         assert second != first and json.loads(get_version(db, second)["member_ids"]) == members
         db.execute("UPDATE club_settings SET fejl40=50 WHERE id=?", (club,))
-        third = current_version_id(db, club)
+        third = save_version(db, club)
         assert third != second and get_version(db, third)["number"] == get_version(db, second)["number"] + 1
         assert get_version(db, first)["fejl40"] == 40  # old versions never change
+
+
+def test_a_night_gets_the_active_version_and_never_makes_one(own_db):
+    """Even if the club's settings changed outside Klubadministration, creating a night only
+    points it at the active version; a new version needs a club administrator's save."""
+    club, members = own_db
+    with connect() as db:
+        active = save_version(db, club)
+        db.execute("UPDATE club_settings SET fejl40=99 WHERE id=?", (club,))
+        sid = db.execute("INSERT INTO sessions(title,club_id) VALUES ('Aften',?)", (club,)).lastrowid
+        stamp_night(db, sid)
+        assert _version_of(db, sid)["id"] == active and night_rules(db, sid)["fejl40"] == 40
+        assert latest_version(db, club)["id"] == active
+
+
+def test_a_night_without_a_version_is_an_error_not_a_guess(own_db):
+    club, _ = own_db
+    with connect() as db:
+        sid = db.execute("INSERT INTO sessions(title,club_id) VALUES ('Uden regler',?)", (club,)).lastrowid
+        with pytest.raises(ValueError, match="ingen regelversion"):
+            night_rules(db, sid)
+        with pytest.raises(ValueError, match="ingen regler"):
+            stamp_night(db, sid)  # the club has never saved its rules
 
 
 def test_nights_and_club_saves_use_versions(restore_club_rules):  # noqa: F811

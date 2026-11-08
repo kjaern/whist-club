@@ -2,6 +2,7 @@
 from fastapi.testclient import TestClient
 
 from whistapp.database import connect, init_db
+from whistapp.rule_versions import stamp_night
 from whistapp.main import app
 
 
@@ -14,6 +15,7 @@ def test_renamed_member_shows_current_name_on_previous_nights_and_statistics():
                    for name in ("Gammelnavn", "Omdøb B", "Omdøb C", "Omdøb D")]
         sid = db.execute("""INSERT INTO sessions(title,club_id,is_club,ended_at,created_at)
             VALUES ('Omdøbt aften',1,1,'2025-03-01 22:00:00','2025-03-01 19:00:00')""").lastrowid
+        stamp_night(db, sid)
         pids = [db.execute("INSERT INTO players(session_id,name,member_id,seat_order) VALUES (?,?,?,?)",
                            (sid, name, mid, i)).lastrowid
                 for i, (name, mid) in enumerate(zip(("Gammelnavn", "Omdøb B", "Omdøb C", "Omdøb D"), members))]

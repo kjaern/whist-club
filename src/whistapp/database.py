@@ -22,7 +22,7 @@ def audit_actor_reset(token):
 from pathlib import Path
 
 from .club import initial_club_name, initial_finance, initial_roster
-from .rule_versions import migrate as migrate_rule_versions
+from .rule_versions import save_version
 from .settings import DATA
 
 DB_PATH = Path(os.environ.get("WHIST_DB", str(DATA / "whist.sqlite3")))
@@ -132,13 +132,6 @@ def init_db():
             db.execute(
                 "ALTER TABLE sessions ADD COLUMN origin TEXT NOT NULL DEFAULT 'live' CHECK(origin IN ('live','imported'))"
             )
-
-        # Snapshot club rates at night creation; existing closed settlements stay authoritative.
-        scols = {r[1] for r in db.execute("PRAGMA table_info(sessions)")}
-        if "placement_rates" not in scols:
-            db.execute("ALTER TABLE sessions ADD COLUMN placement_rates TEXT")
-        if "fejl40_rate" not in scols:
-            db.execute("ALTER TABLE sessions ADD COLUMN fejl40_rate INTEGER")
 
         # Additive migration of databases from earlier releases.
         hand_cols = {r[1] for r in db.execute("PRAGMA table_info(hands)")}
@@ -315,11 +308,6 @@ def init_db():
         scols = {r[1] for r in db.execute("PRAGMA table_info(sessions)")}
         if "club_id" not in scols:
             db.execute("ALTER TABLE sessions ADD COLUMN club_id INTEGER NOT NULL DEFAULT 1")
-        # Snapshot of the club's money mode and bid values when a night starts; NULL means
-        # the original placement payment and house rules, so older nights are unchanged.
-        for column in ("money_mode", "point_rate", "bid_settings"):
-            if column not in scols:
-                db.execute(f"ALTER TABLE sessions ADD COLUMN {column} TEXT")
         db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_club ON sessions(club_id,id)")
         if "date_precision" not in scols:
             db.execute(
@@ -486,7 +474,7 @@ def init_db():
                 END""")
 
         # Versioned club rules: each night points to the rules and medlemsliste it was
-        # played under (see rule_versions.py). The older per-night snapshot columns stay.
+        # played under (see rule_versions.py).
         db.execute("""CREATE TABLE IF NOT EXISTS club_rule_versions (
             id INTEGER PRIMARY KEY,
             club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
@@ -503,4 +491,7 @@ def init_db():
         )""")
         if "rule_version_id" not in {r[1] for r in db.execute("PRAGMA table_info(sessions)")}:
             db.execute("ALTER TABLE sessions ADD COLUMN rule_version_id INTEGER REFERENCES club_rule_versions(id)")
-        migrate_rule_versions(db)
+        # A brand-new database: the seeded first club starts on its first rule version.
+        # Existing databases are changed only by explicit `whistapp migrate` steps.
+        if not db.execute("SELECT 1 FROM club_rule_versions WHERE club_id=1").fetchone()                 and not db.execute("SELECT 1 FROM sessions").fetchone():
+            save_version(db, 1, "opsætning")

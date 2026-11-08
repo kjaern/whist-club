@@ -7,6 +7,7 @@ from whistapp.stats.base import cell
 from whistapp.stats.bids_by_member import BidsByMember
 from whistapp.stats.bids_played import BidsPlayed
 from whistapp.stats.data import Scope, load
+from whistapp.rule_versions import stamp_night
 from whistapp.stats.special_multi import SpecialMulti
 from test_clubs import _activate, _new_login, cleanup_clubs  # noqa: F401
 
@@ -15,6 +16,7 @@ def _seed(db, sid=1, year=2026, members=(1, 2, 3, 4)):
     """Four members; 9 Almindelige won and lost (self-partner), a Sol with two bidders, a paskrig."""
     db.execute("INSERT INTO sessions(id,title,created_at,is_club,club_id) VALUES(?,?,?,1,1)",
                (sid, 'Aften', f'{year}-03-01 18:00:00'))
+    stamp_night(db, sid)
     for m in members:
         db.execute("INSERT OR IGNORE INTO club_members(id,name,club_id) VALUES(?,?,1)", (m, f'M{m}'))
     p = [db.execute("INSERT INTO players(session_id,name,member_id) VALUES(?,?,?)", (sid, f'M{m}', m)).lastrowid
@@ -132,8 +134,7 @@ def test_disabled_bids_are_left_out_unless_played(tmp_path, monkeypatch):
     init_db()
     with connect() as db:
         _seed(db)
-        from whistapp.rule_versions import migrate
-        migrate(db)  # the night was played under the rules before the change
+        # The night was stamped with the rules before this change.
         db.execute("UPDATE club_settings SET bid_settings=? WHERE id=1",
                    (json.dumps({'halve': {'enabled': False}, 'almindelige': {'enabled': False}}),))
         data = load(db, Scope())

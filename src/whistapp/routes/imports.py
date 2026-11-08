@@ -22,7 +22,7 @@ from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import settlement_entries
-from ..rule_versions import club_versions, is_club_night, night_rules, stamp_night, version_at
+from ..rule_versions import club_versions, is_club_night, night_rules, stamp_night
 from .rules import version_name
 from ..historical_import import (
     decimal_text,
@@ -43,15 +43,14 @@ router = APIRouter()
 
 
 # Historical workbook import: preview, correct, validate, commit.
-def import_rule_version(db, raw, timestamp, precision):
-    """The rule version an imported night is played under: the one chosen on the form, else the
-    club's version in force on the night's date, else (no date) the club's current one."""
-    if str(raw or "").isdigit():
-        return int(raw)
-    return version_at(db, active_club_id(), timestamp) if precision != "unknown" else None
+def import_rule_version(raw):
+    """The rule version an imported night is played under: the one chosen on the form, else
+    (None) the club's current one. stamp_night checks that it belongs to the club."""
+    return int(raw) if str(raw or "").isdigit() else None
 
 
 def rule_version_choices(db):
+    """The club's versions, newest first; the form suggests the newest one."""
     return [dict(id=v["id"], name=version_name(v)) for v in club_versions(db, active_club_id())]
 
 
@@ -117,10 +116,8 @@ def _set_import_money(db, sid, enabled):
         if not session["is_club"] or not is_club_night(db, sid):
             raise ValueError("Alle fire spillere skal være klubmedlemmer på aftenens medlemsliste")
 
-        # The night's rule version decides the money; the snapshot columns are kept in step.
+        # The night's rule version decides the money.
         night = night_rules(db, sid)
-        db.execute("UPDATE sessions SET money_mode=?,point_rate=? WHERE id=?",
-                   (night["money_mode"], night["point_rate"], sid))
         entries = settlement_entries(db, sid, night["money_mode"], night["placements"], night["point_rate"])
         db.executemany(
             """INSERT INTO club_member_settlements
@@ -1543,7 +1540,7 @@ async def import_commit(request: Request):
         permanent_sources = _staged_source_files(data.get("pending_source_files", ""))
         permanent_sources.extend(_ai_source_files(data.get("ai_token", "")))
         with connect() as db:
-            version = import_rule_version(db, form.get("rule_version"), timestamp, date_precision)
+            version = import_rule_version(form.get("rule_version"))
             sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
             _set_import_money(db, sid, bool(form.get("collect_club_money")))
             _save_photos(db, sid, _staged_photos(data.get("pending_photos", "")))
@@ -1631,7 +1628,7 @@ async def import_final(request: Request):
             (title, timestamp, timestamp, int(all(mapping)), active_club_id(), *build_stamp()),
         ).lastrowid
         try:
-            stamp_night(db, sid, import_rule_version(db, form.get("rule_version"), timestamp, date_precision))
+            stamp_night(db, sid, import_rule_version(form.get("rule_version")))
         except ValueError as exc:
             raise HTTPException(400, str(exc))
         db.execute(

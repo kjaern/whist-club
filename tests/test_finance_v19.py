@@ -3,6 +3,7 @@ from fractions import Fraction
 from whistapp.finance import fee_amount, placement_amounts, settlement_rows
 from whistapp.database import connect, init_db
 import whistapp.database as database
+from whistapp.rule_versions import save_version, stamp_night
 
 def test_club_finance_configuration():
     assert fee_amount()==40
@@ -15,6 +16,7 @@ def test_settlement_order_and_ties(tmp_path,monkeypatch):
     with connect() as db:
         sid=db.execute("INSERT INTO sessions(title,is_club) VALUES ('A',1)").lastrowid
         for i in range(6): db.execute('INSERT INTO club_members(name) VALUES (?)',(f'P{i}',))
+        save_version(db, 1); stamp_night(db, sid)  # the six members are the night's medlemsliste
         # No hands: all members are tied, so the placement pot is split evenly.
         rows = settlement_rows(db, sid, placement_amounts())
         payments = [Fraction(numerator, denominator) for _, _, numerator, denominator in rows]

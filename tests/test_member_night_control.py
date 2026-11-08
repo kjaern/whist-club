@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 from whistapp.database import connect
+from whistapp.rule_versions import stamp_night
 from whistapp.main import app
 from test_clubs import _activate, _new_login, cleanup_clubs  # noqa: F401
 
@@ -10,6 +11,7 @@ from test_clubs import _activate, _new_login, cleanup_clubs  # noqa: F401
 def _night_with_hand(club_id):
     with connect() as db:
         sid = db.execute("INSERT INTO sessions(title,club_id) VALUES ('Medlemsaften',?)", (club_id,)).lastrowid
+        stamp_night(db, sid)
         db.execute("""INSERT INTO hands(session_id,bid_key,bid_label,target,rules_snapshot)
             VALUES (?,'almindelige','Almindelige',7,'{}')""", (sid,))
     return sid

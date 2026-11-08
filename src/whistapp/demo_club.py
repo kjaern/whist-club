@@ -12,7 +12,7 @@ from fractions import Fraction
 from .bids import get_bid
 from .buildinfo import build_stamp
 from .finance import settlement_entries
-from .rule_versions import stamp_night
+from .rule_versions import save_version, stamp_night
 from .rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from .web import hand_round
 
@@ -78,6 +78,7 @@ def fill_test_club(db, club_id, seed=None, today=None):
                               (club_id,)).fetchone()[0]
     rates = [25 * i for i in range(2, 2 + active_count)]
     db.execute("UPDATE club_settings SET placements=? WHERE id=?", (json.dumps(rates), club_id))
+    save_version(db, club_id)  # the demo's members and rates are its rules, as if saved on Klubadministration
     settings = db.execute("SELECT * FROM club_settings WHERE id=?", (club_id,)).fetchone()
     bid_settings = json.loads(settings["bid_settings"] or "{}")
     bids, keys = load_rules(bid_settings)["bids"], enabled_bid_keys(bid_settings)
@@ -90,11 +91,10 @@ def fill_test_club(db, club_id, seed=None, today=None):
             table = rng.sample(members, rng.choices([4, 5, 6], [2, 5, 2])[0])
             sid = db.execute(
                 """INSERT INTO sessions(title,created_at,ended_at,rotation_mode,is_club,collect_club_money,
-                    placement_rates,fejl40_rate,club_id,money_mode,point_rate,bid_settings,server_version,server_commit)
-                    VALUES (?,?,?,'consecutive',1,1,?,?,?,?,?,?,?,?)""",
-                (day.isoformat(), _ts(start), _ts(start + timedelta(hours=4)), settings["placements"],
-                 settings["fejl40"], club_id, settings["money_mode"], settings["point_rate"],
-                 settings["bid_settings"], *build_stamp())).lastrowid
+                    club_id,server_version,server_commit)
+                    VALUES (?,?,?,'consecutive',1,1,?,?,?)""",
+                (day.isoformat(), _ts(start), _ts(start + timedelta(hours=4)), club_id,
+                 *build_stamp())).lastrowid
             stamp_night(db, sid)
             players = [db.execute(
                 "INSERT INTO players(session_id,name,member_id,seat_order) VALUES (?,?,?,?)",

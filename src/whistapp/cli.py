@@ -115,6 +115,12 @@ def main():
     stamp.add_argument("--commit", help="Short commit hash, e.g. 338dfb5")
     stamp.add_argument("--force", action="store_true", help="Overwrite an existing stamp")
 
+    migrate = sub.add_parser(
+        "migrate",
+        help="Show one-off data migrations, or run one by name (backs the database up first)",
+    )
+    migrate.add_argument("name", nargs="?", help="Migration to run; omit to list them and their state")
+
     run = sub.add_parser("serve")
     run.add_argument("--host", default="127.0.0.1")
     run.add_argument("--port", type=int, default=8000)
@@ -147,6 +153,12 @@ def main():
         print(
             "Password updated. Restart the server to clear existing sessions if needed."
         )
+    elif args.action == "migrate":
+        from .database import init_db
+        from . import migrations
+
+        init_db()
+        print(migrations.run(args.name) if args.name else migrations.status())
     elif args.action == "stamp-night":
         if args.list:
             print(list_nights())

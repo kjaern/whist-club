@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from whistapp.database import connect, init_db
 from whistapp.main import app
-from whistapp.rule_versions import current_version_id
+from whistapp.rule_versions import save_version
 from test_clubs import _activate, _new_login
 
 RATES = [100, 200, 300, 400]
@@ -25,10 +25,10 @@ def club():
         db.execute("INSERT INTO club_settings(id,placements,fejl40) VALUES (?,?,40)", (club_id, json.dumps(RATES)))
         members = [db.execute("INSERT INTO club_members(name,status,club_id) VALUES (?,'active',?)",
                               (name, club_id)).lastrowid for name in ("Anna", "Bo", "Cille", "Dan")]
-        first = current_version_id(db, club_id)
+        first = save_version(db, club_id)
         db.execute("UPDATE club_settings SET fejl40=50,placements=? WHERE id=?", (json.dumps(RATES[:3]), club_id))
         db.execute("UPDATE club_members SET status='paused' WHERE id=?", (members[3],))
-        second = current_version_id(db, club_id)
+        second = save_version(db, club_id)
         db.execute("UPDATE club_rule_versions SET created_at='2020-01-01 12:00:00' WHERE id=?", (first,))
         db.execute("UPDATE club_rule_versions SET created_at='2025-01-01 12:00:00' WHERE id=?", (second,))
     with TestClient(app) as admin:
@@ -87,7 +87,7 @@ def test_short_names_and_member_names_make_no_new_version(club):
         settings.setdefault("sol", {})["short"] = "S"
         db.execute("UPDATE club_settings SET bid_settings=? WHERE id=?", (json.dumps(settings), club["id"]))
         db.execute("UPDATE club_members SET name='Annabel' WHERE id=?", (club["members"][0],))
-        assert current_version_id(db, club["id"]) == club["second"]
+        assert save_version(db, club["id"]) == club["second"]
 
 
 def test_members_can_read_the_rules(club):
@@ -113,17 +113,32 @@ def _version_of_newest_night(club):
                           (club["id"],)).fetchone()[0]
 
 
-def test_import_uses_the_rules_in_force_on_the_nights_date_unless_chosen(club):
+def test_import_suggests_the_current_rules_and_any_version_can_be_chosen(club):
     page = club["admin"].get("/import").text
-    assert 'name="rule_version"' in page and "Reglerne på aftenens dato" in page
+    current = f'<option value="{club["second"]}" selected>Version 2 · fra 1. januar 2025 (nuværende)</option>'
+    assert current in page and f'<option value="{club["first"]}" >Version 1' in page
+    # Without a choice the night gets the current rules, whatever its date.
     assert _final_import(club["admin"]).status_code == 303
-    assert _version_of_newest_night(club) == club["first"]
-    _final_import(club["admin"], game_date="2025-06-01")
     assert _version_of_newest_night(club) == club["second"]
-    _final_import(club["admin"], game_date="2025-06-01", rule_version=str(club["first"]))
-    assert _version_of_newest_night(club) == club["first"]
     _final_import(club["admin"], game_date="", date_precision="unknown")
     assert _version_of_newest_night(club) == club["second"]
+    _final_import(club["admin"], rule_version=str(club["first"]))
+    assert _version_of_newest_night(club) == club["first"]
     with connect() as db:
         other = db.execute("SELECT id FROM club_rule_versions WHERE club_id=1 LIMIT 1").fetchone()[0]
     assert _final_import(club["admin"], rule_version=str(other)).status_code == 400
+
+
+def test_opening_pages_never_makes_a_version(club):
+    """A version is made when rules are saved or a night is created, never by viewing a page,
+    even if the club's settings have changed outside Klubadministration."""
+    def versions():
+        with connect() as db:
+            return db.execute("SELECT COUNT(*) FROM club_rule_versions WHERE club_id=?", (club["id"],)).fetchone()[0]
+    before = versions()
+    with connect() as db:
+        db.execute("UPDATE club_settings SET fejl40=60 WHERE id=?", (club["id"],))
+    for path in ("/", "/rules", "/rules/2", "/import"):
+        assert club["admin"].get(path).status_code == 200, path
+    assert versions() == before
+    assert "Version 2 · fra 1. januar 2025" in club["admin"].get("/").text

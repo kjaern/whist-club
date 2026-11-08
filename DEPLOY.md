@@ -93,6 +93,23 @@ docker compose exec whist whistapp stamp-night --list
 docker compose exec whist whistapp stamp-night --night <id> --version 1.0.0 --commit 338dfb5
 ```
 
+## One-off migrations
+
+Starting a new build only adds missing tables and columns. Changes that rewrite or
+remove existing data are separate, one-off migrations that you run by hand. List
+them and their state:
+
+```sh
+docker compose exec whist whistapp migrate
+```
+
+Run one by name. It refuses if its preconditions are not met, and it first saves a
+copy of the database next to it (`data/whist-before-<name>-<time>.sqlite3`):
+
+```sh
+docker compose exec whist whistapp migrate drop-night-rule-columns
+```
+
 ## Reset the test database
 
 **Destructive:** this removes all game nights, hands, scores, settlements, and

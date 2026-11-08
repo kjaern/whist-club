@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from ..club import active_club_id
 from ..database import connect
 from ..finance import MONEY_MODES
-from ..rule_versions import club_versions, current_version_id, night_version
+from ..rule_versions import club_versions, night_version
 from ..rules import bid_classes, bid_type_order
 from ..web import fmt, get_session, local_time, render
 
@@ -109,7 +109,6 @@ def changes(db, before, after):
 @router.get("/rules", response_class=HTMLResponse)
 def rule_history(request: Request):
     with connect() as db:
-        current_version_id(db, active_club_id())
         versions = club_versions(db, active_club_id())
         nights = {r[0]: r[1] for r in db.execute(
             "SELECT rule_version_id,COUNT(*) FROM sessions WHERE club_id=? GROUP BY rule_version_id", (active_club_id(),))}

@@ -707,83 +707,99 @@ async def create_hand(request: Request, sid: int):
     return render(request, "partials/session_content.html", **data)
 
 
+def hand_result(db, session, hand, get, getlist):
+    """Score a correction of a saved hand. `get`/`getlist` read the submitted fields.
+
+    Shared by the live night's correction form and by editing a closed night, so both
+    score a hand the same way. Raises ValueError (and friends) on an invalid hand.
+    """
+    hid = hand["id"]
+    rules = load_rules(session_bid_settings(db, session))["bids"]
+    participants = [r[0] for r in db.execute(
+        "SELECT player_id FROM hand_participants WHERE hand_id=?", (hid,))]
+    original_declarer = db.execute(
+        "SELECT player_id FROM hand_declarers WHERE hand_id=?", (hid,)).fetchone()[0]
+    key = str(get("bid_key") or hand["bid_key"])
+    # A correction may keep the hand's bid even if the club has since disabled it.
+    if key != hand["bid_key"] and key not in enabled_bid_keys(session_bid_settings(db, session)):
+        raise ValueError("Meldingen er ikke slået til i klubben")
+    bid = rules[key]
+    declarer = int(get("declarer") or original_declarer)
+    if declarer not in participants:
+        raise ValueError("Melder skal deltage i hånden")
+    target = target_for(bid, get("target") if bid["target"] == "variable" else None)
+    if bid["target"] == "variable":
+        actual = int(get("actual"))
+        partner = int(get("partner"))
+        if partner not in participants or not 0 <= actual <= 13:
+            raise ValueError("Ugyldig makker eller stik")
+        result = get_bid(key).score(
+            bid, active=participants, declarer=declarer, target=target,
+            actual=actual, partner=partner,
+            **({"level": int(key[-1])} if key.startswith("vip") else {}),
+        )
+        won, value, scores = result.won, result.contract_points, result.scores
+        specials = []
+    else:
+        partner = None
+        actual = None
+        won = value = None
+        previous = {r["player_id"]: r["actual"] for r in db.execute(
+            "SELECT player_id,actual FROM special_bids WHERE hand_id=?", (hid,))}
+        if bid["target"] == "fixed":
+            bidders = [int(v) for v in getlist("going")]
+            bidders = list(dict.fromkeys([declarer] + bidders))
+        else:
+            bidders = participants
+        if not set(bidders) <= set(participants):
+            raise ValueError("Ugyldige meldere")
+        actuals = {}
+        specials = []
+        for pid in bidders:
+            n = int(get(f"actual_{pid}", previous.get(pid) if previous.get(pid) is not None else 0))
+            if not 0 <= n <= 13:
+                raise ValueError("Ugyldige stik")
+            actuals[pid] = n
+            outcome = special_outcome(bid, n)[0] if bid["target"] == "fixed" else None
+            specials.append((pid, n, int(outcome) if outcome is not None else None))
+        scores = get_bid(key).score(
+            bid, active=participants, declarer=declarer, actuals=actuals).scores
+    return dict(key=key, bid=bid, target=target, actual=actual, won=won, value=value,
+                partner=partner, declarer=declarer, specials=specials, scores=scores)
+
+
+def write_hand(db, hid, r):
+    """Store a scored hand from hand_result()."""
+    db.execute("""UPDATE hands SET bid_key=?,bid_label=?,target=?,actual=?,won=?,
+                  contract_points=?,rules_snapshot=?,partner_id=? WHERE id=?""",
+               (r["key"], r["bid"]["label"], r["target"], r["actual"],
+                int(r["won"]) if r["won"] is not None else None,
+                float(r["value"]) if r["value"] is not None else None,
+                rules_snapshot(r["bid"]), r["partner"], hid))
+    db.execute("DELETE FROM hand_declarers WHERE hand_id=?", (hid,))
+    db.execute("INSERT INTO hand_declarers(hand_id,player_id) VALUES (?,?)", (hid, r["declarer"]))
+    db.execute("DELETE FROM special_bids WHERE hand_id=?", (hid,))
+    db.executemany("INSERT INTO special_bids(hand_id,player_id,actual,won) VALUES (?,?,?,?)",
+                   [(hid, *item) for item in r["specials"]])
+    db.execute("DELETE FROM hand_scores WHERE hand_id=?", (hid,))
+    db.executemany("INSERT INTO hand_scores(hand_id,player_id,numerator,denominator) VALUES (?,?,?,?)",
+                   [(hid, pid, Fraction(str(v)).numerator, Fraction(str(v)).denominator)
+                    for pid, v in r["scores"].items()])
+
+
 @router.post("/sessions/{sid}/hands/{hid}/result", response_class=HTMLResponse)
 async def set_result(request: Request, sid: int, hid: int):
     form = await request.form()
     with connect() as db:
         session = require_open(db, sid)
-        rules = load_rules(session_bid_settings(db, session))["bids"]
         hand = db.execute("SELECT * FROM hands WHERE id=? AND session_id=?", (hid, sid)).fetchone()
         if not hand:
             raise HTTPException(404)
-        participants = [r[0] for r in db.execute(
-            "SELECT player_id FROM hand_participants WHERE hand_id=?", (hid,))]
-        original_declarer = db.execute(
-            "SELECT player_id FROM hand_declarers WHERE hand_id=?", (hid,)).fetchone()[0]
         try:
-            key = str(form.get("bid_key") or hand["bid_key"])
-            # A correction may keep the hand's bid even if the club has since disabled it.
-            if key != hand["bid_key"] and key not in enabled_bid_keys(session_bid_settings(db, session)):
-                raise ValueError("Meldingen er ikke slået til i klubben")
-            bid = rules[key]
-            declarer = int(form.get("declarer") or original_declarer)
-            if declarer not in participants:
-                raise ValueError("Melder skal deltage i hånden")
-            target = target_for(bid, form.get("target") if bid["target"] == "variable" else None)
-            if bid["target"] == "variable":
-                actual = int(form["actual"])
-                partner = int(form["partner"])
-                if partner not in participants or not 0 <= actual <= 13:
-                    raise ValueError("Ugyldig makker eller stik")
-                result = get_bid(key).score(
-                    bid, active=participants, declarer=declarer, target=target,
-                    actual=actual, partner=partner,
-                    **({"level": int(key[-1])} if key.startswith("vip") else {}),
-                )
-                won, value, scores = result.won, result.contract_points, result.scores
-                specials = []
-            else:
-                partner = None
-                actual = None
-                won = value = None
-                previous = {r["player_id"]: r["actual"] for r in db.execute(
-                    "SELECT player_id,actual FROM special_bids WHERE hand_id=?", (hid,))}
-                if bid["target"] == "fixed":
-                    bidders = [int(v) for v in form.getlist("going")]
-                    bidders = list(dict.fromkeys([declarer] + bidders))
-                else:
-                    bidders = participants
-                if not set(bidders) <= set(participants):
-                    raise ValueError("Ugyldige meldere")
-                actuals = {}
-                specials = []
-                for pid in bidders:
-                    n = int(form.get(f"actual_{pid}", previous.get(pid) if previous.get(pid) is not None else 0))
-                    if not 0 <= n <= 13:
-                        raise ValueError("Ugyldige stik")
-                    actuals[pid] = n
-                    outcome = special_outcome(bid, n)[0] if bid["target"] == "fixed" else None
-                    specials.append((pid, n, int(outcome) if outcome is not None else None))
-                scores = get_bid(key).score(
-                    bid, active=participants, declarer=declarer, actuals=actuals).scores
+            result = hand_result(db, session, hand, form.get, form.getlist)
         except (ValueError, TypeError, KeyError, IndexError) as exc:
             raise HTTPException(400, f"Ugyldig hånd: {exc}")
-
-        db.execute("""UPDATE hands SET bid_key=?,bid_label=?,target=?,actual=?,won=?,
-                      contract_points=?,rules_snapshot=?,partner_id=? WHERE id=?""",
-                   (key, bid["label"], target, actual,
-                    int(won) if won is not None else None,
-                    float(value) if value is not None else None,
-                    rules_snapshot(bid), partner, hid))
-        db.execute("DELETE FROM hand_declarers WHERE hand_id=?", (hid,))
-        db.execute("INSERT INTO hand_declarers(hand_id,player_id) VALUES (?,?)", (hid, declarer))
-        db.execute("DELETE FROM special_bids WHERE hand_id=?", (hid,))
-        db.executemany("INSERT INTO special_bids(hand_id,player_id,actual,won) VALUES (?,?,?,?)",
-                       [(hid, *item) for item in specials])
-        db.execute("DELETE FROM hand_scores WHERE hand_id=?", (hid,))
-        db.executemany("INSERT INTO hand_scores(hand_id,player_id,numerator,denominator) VALUES (?,?,?,?)",
-                       [(hid, pid, Fraction(str(v)).numerator, Fraction(str(v)).denominator)
-                        for pid, v in scores.items()])
+        write_hand(db, hid, result)
         data = view_data(db, sid)
     return render(request, "partials/session_content.html", **data)
 
@@ -863,24 +879,29 @@ def _settlement_change(db, before, after):
         f"{names.get(m, f'#{m}')} {fmt(before.get(m, Fraction()))} → {fmt(after.get(m, Fraction()))} kr" for m in changed)
 
 
-@router.post("/sessions/{sid}/reopen")
-def reopen_night(request: Request, sid: int, night_state: str = Form("")):
-    """Reopen a closed evening for corrections. Its settlement stays until it is closed again."""
-    with connect() as db:
-        db.execute("BEGIN IMMEDIATE")  # two devices cannot both pass the checks below
-        session = get_session(db, sid)
-        if session["ended_at"] is None:
-            return RedirectResponse(f"/sessions/{sid}", status_code=303)
-        if _stale(db, sid, night_state):
-            db.rollback()
-            return close_error(request, sid, STALE_NIGHT)
-        db.execute("UPDATE sessions SET ended_at=NULL WHERE id=?", (sid,))
-        db.execute(
-            "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
-            (sid, request.session.get("user", "admin"),
-             "Genåbnet til rettelse; afregningen gælder, indtil aftenen afsluttes igen"),
-        )
-    return RedirectResponse(f"/sessions/{sid}", status_code=303)
+def settle_night(db, sid, collect):
+    """Replace a night's settlement with one worked out from its hands and rule version.
+
+    The new settlement is computed before the old one is removed, all in the caller's
+    transaction, so a failure leaves the previous settlement in place. Returns what
+    changed per member, for the evening log.
+    """
+    entries = []
+    if collect:
+        night = night_rules(db, sid)
+        entries = settlement_entries(db, sid, night["money_mode"], night["placements"], night["point_rate"])
+    before = _settlement(db, sid)
+    db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
+    db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
+    db.executemany(
+        """INSERT INTO club_member_settlements
+        (session_id,member_id,place,amount_numerator,amount_denominator)
+        VALUES (?,?,?,?,?)""",
+        [(sid, *entry) for entry in entries],
+    )
+    if len(_settlement(db, sid)) != len(entries):
+        raise ValueError("Incomplete settlement")
+    return _settlement_change(db, before, _settlement(db, sid))
 
 
 @router.post("/sessions/{sid}/end")
@@ -904,30 +925,11 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
             is_club = is_club_night(db, sid)
             collect = bool(is_club and collect_club_money)
 
-            # Work out the new settlement first; the old one is replaced only once it exists,
-            # in this transaction, so a failure leaves the previous settlement in place.
-            entries = []
-            if collect:
-                night = night_rules(db, sid)
-                entries = settlement_entries(db, sid, night["money_mode"], night["placements"],
-                                             night["point_rate"])
-            before = _settlement(db, sid)
-            db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
-            db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
-            db.executemany(
-                """INSERT INTO club_member_settlements
-                (session_id,member_id,place,amount_numerator,amount_denominator)
-                VALUES (?,?,?,?,?)""",
-                [(sid, *entry) for entry in entries],
-            )
-            if len(_settlement(db, sid)) != len(entries):
-                raise ValueError("Incomplete settlement")
-
+            change = settle_night(db, sid, collect)
             db.execute(
                 "UPDATE sessions SET is_club=?,collect_club_money=?,ended_at=CURRENT_TIMESTAMP WHERE id=?",
                 (int(is_club), int(collect), sid),
             )
-            change = _settlement_change(db, before, _settlement(db, sid))
             if change:
                 db.execute(
                     "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",

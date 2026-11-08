@@ -132,8 +132,8 @@ def member_operation_allowed(path, method):
         return (path == "/sessions" or
                 (path.startswith("/import/") and not path.startswith("/import/ai") or
                  path == "/import/ai" or path.startswith("/import/current/")) or
-                # Any active member runs the night, including closing and reopening it.
-                bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos|end|reopen)", path)))
+                # Any active member runs the night, including closing it; editing a closed night is for club admins.
+                bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos|end)", path)))
     return False
 
 

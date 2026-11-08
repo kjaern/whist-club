@@ -22,7 +22,8 @@ from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import settlement_entries
-from ..rule_versions import is_club_night, night_rules, stamp_night
+from ..rule_versions import club_versions, is_club_night, night_rules, stamp_night, version_at
+from .rules import version_name
 from ..historical_import import (
     decimal_text,
     field_issues,
@@ -42,6 +43,18 @@ router = APIRouter()
 
 
 # Historical workbook import: preview, correct, validate, commit.
+def import_rule_version(db, raw, timestamp, precision):
+    """The rule version an imported night is played under: the one chosen on the form, else the
+    club's version in force on the night's date, else (no date) the club's current one."""
+    if str(raw or "").isdigit():
+        return int(raw)
+    return version_at(db, active_club_id(), timestamp) if precision != "unknown" else None
+
+
+def rule_version_choices(db):
+    return [dict(id=v["id"], name=version_name(v)) for v in club_versions(db, active_club_id())]
+
+
 def historical_date(value, precision):
     """Return sortable storage timestamp and human-readable title; precision is stored separately."""
     value = value.strip()
@@ -843,12 +856,14 @@ def _render_import_page(
                 (active_club_id(),),
             )
         ]
+        rule_versions = rule_version_choices(db)
 
     return render(
         request,
         "historical_import.html",
         members=members,
         previous=previous,
+        rule_versions=rule_versions,
         data=None,
         errors=errors or [],
         title="",
@@ -1241,6 +1256,7 @@ def import_review(
                 (active_club_id(),),
             )
         ]
+        rule_versions = rule_version_choices(db)
 
     # Read-only inferred fields must not constrain score-based review validation.
     for hand in data["hands"]:
@@ -1285,6 +1301,9 @@ def import_review(
         game_date=game_date,
         date_precision=date_precision,
         replace_id=replace_id,
+        rule_versions=rule_versions,
+        # The commit route keeps the posted choice here when it shows the review again.
+        rule_version=str(getattr(request.state, "rule_version", "")),
         mapping=auto_mapping,
         bid_options=list(registered_bids()),
         staged_photo_names=[
@@ -1355,6 +1374,7 @@ async def import_check_hand(request: Request):
 @router.post("/import/commit", response_class=HTMLResponse)
 async def import_commit(request: Request):
     form = await request.form()
+    request.state.rule_version = str(form.get("rule_version", ""))
 
     try:
         data = json.loads(str(form["data"]))
@@ -1523,7 +1543,8 @@ async def import_commit(request: Request):
         permanent_sources = _staged_source_files(data.get("pending_source_files", ""))
         permanent_sources.extend(_ai_source_files(data.get("ai_token", "")))
         with connect() as db:
-            sid = save_import(db, data, title, timestamp, mapping, replace_id)
+            version = import_rule_version(db, form.get("rule_version"), timestamp, date_precision)
+            sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
             _set_import_money(db, sid, bool(form.get("collect_club_money")))
             _save_photos(db, sid, _staged_photos(data.get("pending_photos", "")))
             db.execute(
@@ -1609,7 +1630,10 @@ async def import_final(request: Request):
               server_version,server_commit) VALUES (?,?,?,'imported',?,0,?,?,?)""",
             (title, timestamp, timestamp, int(all(mapping)), active_club_id(), *build_stamp()),
         ).lastrowid
-        stamp_night(db, sid)
+        try:
+            stamp_night(db, sid, import_rule_version(db, form.get("rule_version"), timestamp, date_precision))
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
         db.execute(
             "UPDATE sessions SET date_precision=? WHERE id=?", (date_precision, sid)
         )

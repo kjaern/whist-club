@@ -4,7 +4,7 @@
     <h1>
       {{session.title}} · {{ "Resultat" if session.ended_at else "Live" }}
     </h1>
-    <a href="/sessions/{{session.id}}">Spiladministration</a><a href="/sessions/{{session.id}}/history">Ændringshistorik</a><a href="/sessions/{{session.id}}/export.xlsx">Eksportér Excel</a><a href="/sessions/{{session.id}}/statistics">Statistik</a>{% if session.ended_at %}<a href="/sessions/{{session.id}}/live">Opdatér</a><span class="muted">Spilaftenen er afsluttet</span>{% else %}<span class="muted">Opdateres automatisk hvert 3. sekund</span>{% endif %}
+    <a href="/sessions/{{session.id}}">Spiladministration</a><a href="/sessions/{{session.id}}/rules">Regler for aftenen</a><a href="/sessions/{{session.id}}/history">Ændringshistorik</a><a href="/sessions/{{session.id}}/export.xlsx">Eksportér Excel</a><a href="/sessions/{{session.id}}/statistics">Statistik</a>{% if session.ended_at %}<a href="/sessions/{{session.id}}/live">Opdatér</a><span class="muted">Spilaftenen er afsluttet</span>{% else %}<span class="muted">Opdateres automatisk hvert 3. sekund</span>{% endif %}
   </div>
   {% include 'partials/server_build.html' %}
   {% include 'partials/live_scoreboard.html' %}

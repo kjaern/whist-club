@@ -78,6 +78,10 @@
 {% for member in members %}<option value="{{member.id}}">{{member.name}}</option>{% endfor %}
 </select></label></div>
 {% endfor %}
+<label>Brug regler<select name="rule_version">
+<option value="">Reglerne på aftenens dato</option>
+{% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string %}selected{% endif %}>{{v.name}}</option>{% endfor %}
+</select></label>
 <label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
 <button type="submit">Gem slutresultater</button>
 </form>
@@ -358,6 +362,10 @@ fetch('/import/ai/staged/{{ai_artifacts.token}}/transcription.json')
 </select></label></div>
 {% endfor %}
 </div>
+<label>Brug regler<select name="rule_version">
+<option value="">Reglerne på aftenens dato</option>
+{% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string %}selected{% endif %}>{{v.name}}</option>{% endfor %}
+</select></label>
 <label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
 <label>Ret en tidligere import (valgfrit)<select name="replace_id">
 <option value="">Opret ny spilaften</option>

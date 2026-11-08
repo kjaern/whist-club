@@ -59,6 +59,7 @@
 <div class="night-actions">
   <a class="button secondary" href="/sessions/{{session.id}}/export.xlsx">Eksportér Excel</a>
   <a class="button secondary" href="/sessions/{{session.id}}/statistics">Statistik</a>
+  <a class="button secondary" href="/sessions/{{session.id}}/rules">Regler for aftenen</a>
   <a class="button secondary" href="/sessions/{{session.id}}/history">Ændringshistorik</a>
   {% if not session.ended_at %}
     <form method="post" action="/sessions/{{session.id}}/end" onsubmit="return confirm('Afslut spilaftenen? Den bliver låst for ændringer.')">

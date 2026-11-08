@@ -833,7 +833,7 @@ def field_issues(hand, players, problems):
     return fields
 
 
-def save_import(db, data, title, created_at, member_mapping, replace_id=None):
+def save_import(db, data, title, created_at, member_mapping, replace_id=None, rule_version_id=None):
     """All-or-nothing import; caller owns the transaction."""
     issues = validate(data)
     if any(issues):
@@ -858,6 +858,8 @@ def save_import(db, data, title, created_at, member_mapping, replace_id=None):
             "UPDATE sessions SET title=?,created_at=?,ended_at=?,is_club=?,collect_club_money=0 WHERE id=?",
             (title, created_at, created_at, int(all(member_mapping.values())), sid),
         )
+        if rule_version_id is not None:
+            stamp_night(db, sid, rule_version_id)
     else:
         sid = db.execute(
             """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id,
@@ -865,7 +867,7 @@ def save_import(db, data, title, created_at, member_mapping, replace_id=None):
             (title, created_at, created_at, int(all(member_mapping.values())), active_club_id(),
              *build_stamp()),
         ).lastrowid
-        stamp_night(db, sid)
+        stamp_night(db, sid, rule_version_id)
 
     ids = {}
     for i, name in enumerate(data["players"]):

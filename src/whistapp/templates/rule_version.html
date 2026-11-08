@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="live-heading">
+    <h1>{% if session %}Regler for aftenen · {{session.title}}{% else %}Regler · version {{version.number}}{% endif %}</h1>
+    {% if session %}<a href="/sessions/{{session.id}}/live">← Spilaftenen</a>{% endif %}
+    <a href="/rules">Regelhistorik</a>
+  </div>
+  <p>
+    <strong>{{version.name}}</strong>{% if version.number == latest %} · klubbens nuværende regler{% endif %}
+    <span class="muted">· oprettet {{version.created_at}}{% if version.created_by %} af {{version.created_by}}{% endif %}</span>
+  </p>
+  {% if session %}
+    <p class="muted">Aftenen spilles og afregnes efter disse regler, også hvis klubbens regler ændres senere.
+      {% if version.number != latest %}<a href="/rules/{{latest}}">Se klubbens nuværende regler</a>.{% endif %}</p>
+  {% endif %}
+
+  <section class="card">
+    <h2>Betaling</h2>
+    <p>{{version.money_mode_label}}{% if version.money_mode != 'placement' %} · {{version.point_rate}} kr. pr. point{% endif %}</p>
+    {% if version.money_mode == 'placement' %}
+      <table class="rule-table">
+        <thead><tr><th>Plads</th><th>Betaling</th></tr></thead>
+        <tbody>{% for place, amount in version.placements %}<tr><td>{{place}}.</td><td>{{amount}} kr</td></tr>{% endfor %}</tbody>
+      </table>
+    {% endif %}
+    <p>Fejl40: {{version.fejl40}} kr</p>
+  </section>
+
+  <section class="card">
+    <h2>Meldinger</h2>
+    <table class="rule-table">
+      <thead><tr><th>Melding</th><th>Spilles</th><th>Værdier</th></tr></thead>
+      <tbody>
+        {% for bid in version.bids %}
+          <tr{% if not bid.enabled %} class="muted"{% endif %}>
+            <td>{{bid.label}}</td><td>{{'Ja' if bid.enabled else 'Nej'}}</td>
+            <td>{% for label, value in bid.options %}{{label}}: {{value}}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Medlemsliste</h2>
+    <p class="muted">Medlemmerne, der placeres og betaler på en klubaften. Spiller andre med, er aftenen uden for klubstatistik og klubkasse. Navnene er medlemmernes nuværende navne.</p>
+    <ul>{% for m in version.members %}<li>{{m.name}}</li>{% else %}<li class="muted">Ingen medlemmer</li>{% endfor %}</ul>
+  </section>
+{% endblock %}

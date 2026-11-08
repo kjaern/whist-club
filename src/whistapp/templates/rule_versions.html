@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Regelhistorik</h1>
+  <p class="muted">Hver gang klubbens regler eller medlemsliste ændres, får klubben en ny version. En spilaften spilles og afregnes altid efter den version, den blev oprettet under.</p>
+  {% for v in history %}
+    <section class="card">
+      <h2><a href="/rules/{{v.number}}">{{v.name}}</a>{% if loop.first %} · nuværende{% endif %}</h2>
+      <p class="muted">{% if v.created_by %}Oprettet af {{v.created_by}} · {% endif %}{{v.nights}} {{'spilaften' if v.nights == 1 else 'spilaftener'}}</p>
+      <ul>{% for change in v.changes %}<li>{{change}}</li>{% endfor %}</ul>
+    </section>
+  {% endfor %}
+  <a href="/">← Spilaftener</a>
+{% endblock %}

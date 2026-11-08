@@ -10,7 +10,8 @@
     <li><strong>Føre en spilaften</strong> under <em>Spiladministration</em>: tilføje hænder, rette eller slette en hånd med <em>Ret</em> i hændernes tabel, tilføje spillere undervejs, ændre bordrækkefølgen (<em>Ændr bordrækkefølge</em>), markere en spiller som gået ved at trykke på <em>Aktiv</em> ved navnet og registrere Fejl40.</li>
     <li><strong>Afslutte</strong> en spilaften. En afsluttet aften er låst; kun en klubadministrator kan rette den bagefter.</li>
     <li><strong>Følge med live</strong>: livevisningen opdaterer sig selv, så den kan stå fremme på en skærm ved bordet.</li>
-    <li><strong>Importere en spilaften</strong> fra Excel{% if ai_import_allowed() %} eller fotos af regnskabsarket (AI-import){% endif %} via <a href="/import">Importer spilaften</a>.</li>
+    <li><strong>Importere en spilaften</strong> fra Excel{% if ai_import_allowed() %} eller fotos af regnskabsarket (AI-import){% endif %} via <a href="/import">Importer spilaften</a>. Aftenen får de regler, klubben havde på aftenens dato; vælg en anden version under <em>Brug regler</em>.</li>
+    <li><strong>Se reglerne</strong>: <em>Regler for aftenen</em> på en spilaften viser betaling, Fejl40, meldinger og medlemsliste, som aftenen spilles efter. <a href="/rules">Regelhistorik</a> viser alle klubbens regelversioner, og hvad hver ændrede.</li>
     <li><strong>Se statistik og ændringshistorik</strong>, og eksportere en aften eller et år som Excel.</li>
     <li><strong>Skifte sin adgangskode</strong> under <a href="/account">Min konto</a>.</li>
   </ul>
@@ -49,7 +50,7 @@
     <li><strong>Rette en afsluttet spilaften</strong> med <em>Rediger spilaften</em>: ret eller slet hænder og Fejl40. Intet ændres, før du trykker <em>Gem ændringer</em>; <em>Beregn</em> viser først de nye point og hvad afregningen bliver. Aftenen og dens afregning er uændret, indtil du gemmer, og ændringen skrives i aftenens log.</li>
     <li>Slette en spilaften fra forsiden, rette betalingen på importerede aftener og fjerne uploadede originalark.</li>
   </ul>
-  <p class="muted">Ændringer af satser og meldinger gælder kun nye spilaftener; eksisterende aftener beholder deres regler.</p>
+  <p class="muted">Ændrer du betaling, Fejl40, meldinger eller hvem der er aktive, får klubben en ny regelversion. Den gælder kun nye spilaftener; eksisterende aftener beholder deres regler, også når de rettes. Navne, aliaser og korte navne ændrer ingen version og vises med det samme på alle aftener.</p>
 </section>
 
 <section class="card">

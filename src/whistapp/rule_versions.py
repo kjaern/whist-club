@@ -13,6 +13,14 @@ RULE_FIELDS = ("placements", "fejl40", "money_mode", "point_rate", "bid_settings
 MIGRATION_ACTOR = "migrering"
 
 
+def _rule_bid_settings(raw):
+    """Bid settings without the short names, which are display text read from the club now.
+    A bid left with no settings is the same as a bid with none saved."""
+    stripped = {key: {k: v for k, v in entry.items() if k != "short"} if isinstance(entry, dict) else entry
+                for key, entry in json.loads(raw or "{}").items()}
+    return {key: entry for key, entry in stripped.items() if entry != {}}
+
+
 def _key(values, member_ids):
     """Comparable form of a version; equal keys mean the same rules and medlemsliste."""
     return (
@@ -20,7 +28,7 @@ def _key(values, member_ids):
         int(values["fejl40"]),
         values["money_mode"] or "placement",
         str(values["point_rate"] or "1"),
-        json.dumps(json.loads(values["bid_settings"] or "{}"), sort_keys=True),
+        json.dumps(_rule_bid_settings(values["bid_settings"]), sort_keys=True),
         tuple(sorted(member_ids)),
     )
 
@@ -74,10 +82,31 @@ def current_version_id(db, club_id, created_by=None):
     return _insert(db, club_id, settings, members, created_by)
 
 
-def stamp_night(db, sid):
-    """Point a new night at its club's current version."""
+def stamp_night(db, sid, version_id=None):
+    """Point a night at a version of its own club, by default the club's current one."""
     club_id = db.execute("SELECT club_id FROM sessions WHERE id=?", (sid,)).fetchone()[0]
-    db.execute("UPDATE sessions SET rule_version_id=? WHERE id=?", (current_version_id(db, club_id), sid))
+    if version_id is None:
+        version_id = current_version_id(db, club_id)
+    elif not db.execute("SELECT 1 FROM club_rule_versions WHERE id=? AND club_id=?", (version_id, club_id)).fetchone():
+        raise ValueError("Ukendt regelversion")
+    db.execute("UPDATE sessions SET rule_version_id=? WHERE id=?", (version_id, sid))
+
+
+def version_at(db, club_id, timestamp):
+    """The club's version in force at a moment: the newest one made by then, else its first one.
+
+    Versions made by the migration carry the time of the first night played under them.
+    """
+    current_version_id(db, club_id)
+    row = db.execute("""SELECT id FROM club_rule_versions WHERE club_id=? AND created_at<=?
+        ORDER BY number DESC LIMIT 1""", (club_id, timestamp)).fetchone() or db.execute(
+        "SELECT id FROM club_rule_versions WHERE club_id=? ORDER BY number LIMIT 1", (club_id,)).fetchone()
+    return row and row[0]
+
+
+def club_versions(db, club_id):
+    """The club's versions, newest first."""
+    return db.execute("SELECT * FROM club_rule_versions WHERE club_id=? ORDER BY number DESC", (club_id,)).fetchall()
 
 
 def _night_values(session, settings):

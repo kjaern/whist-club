@@ -24,7 +24,8 @@ from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
 from ..finance import export_workbook, export_year_workbook, settlement_entries
-from ..rule_versions import is_club_night, night_rules, stamp_night
+from ..rule_versions import current_version_id, get_version, is_club_night, night_rules, stamp_night
+from .rules import version_name
 from ..rules import enabled_bid_keys, load_rules, rules_snapshot, special_outcome, target_for
 from ..stats.base import cell as stat_cell
 from ..stats.data import Scope, load
@@ -59,22 +60,32 @@ def home(request: Request):
             sessions = db.execute("SELECT sessions.*, (SELECT COUNT(*) FROM players WHERE players.session_id=sessions.id) AS player_count FROM sessions WHERE club_id=? ORDER BY sessions.id DESC", (active_club_id(),)).fetchall()
         with connect() as db:
             roster = club_players(db, active_only=True)
+            rules_now = _current_rules(db)
         return render(request, "home.html", sessions=sessions,
                       default_title=date.today().isoformat(), club_players=roster,
-                      member_view=not can_manage_club(request))
+                      member_view=not can_manage_club(request), current_rules=rules_now)
     with connect() as db:
         sessions = db.execute(
             "SELECT sessions.*, (SELECT COUNT(*) FROM players WHERE players.session_id=sessions.id) AS player_count FROM sessions WHERE club_id=? ORDER BY sessions.id DESC",
             (active_club_id(),),
         ).fetchall()
         roster = club_players(db, active_only=True)
+        rules_now = _current_rules(db)
     return render(
         request,
         "home.html",
         sessions=sessions,
         default_title=date.today().isoformat(),
         club_players=roster,
+        current_rules=rules_now,
     )
+
+
+def _current_rules(db):
+    """The version a night created now is played under, for the new-night form."""
+    version_id = current_version_id(db, active_club_id())
+    version = version_id and get_version(db, version_id)
+    return version and dict(number=version["number"], name=version_name(version))
 
 
 @router.post("/sessions")

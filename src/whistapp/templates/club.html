@@ -1,7 +1,8 @@
 {% extends 'base.html' %}
 {% block content %}
   <h1>Klubadministration</h1>
-  <p><a href="/">← Spilaftener</a></p>
+  <p><a href="/">← Spilaftener</a> · <a href="/rules">Regelhistorik →</a></p>
+  <p class="muted">Ændrer du betaling, Fejl40, meldinger eller hvem der er aktive, får klubben en ny regelversion. Nye spilaftener bruger den; eksisterende aftener beholder deres. Navne og aliaser ændrer ingen version.</p>
   {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
   {% if saved %}<p role="status">Ændringerne er gemt.</p>{% endif %}
 

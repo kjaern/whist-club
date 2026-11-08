@@ -4,7 +4,7 @@
     Spilaftener
   </h1>
   <p>
-    <a href="/statistics">Klubstatistik →</a> · <a href="/import">Importer spilaften →</a>{% if not member_view %} · <a href="/club">Klubadministration →</a>{% endif %}
+    <a href="/statistics">Klubstatistik →</a> · <a href="/import">Importer spilaften →</a> · <a href="/rules">Regelhistorik →</a>{% if not member_view %} · <a href="/club">Klubadministration →</a>{% endif %}
   </p>
   <section class="card setup-card">
     <h2>
@@ -42,6 +42,9 @@
         <label class="radio-option"><input type="radio" name="rotation_mode" value="consecutive" checked>Fire i træk — 1, 2, 3, 4 → 2, 3, 4, 5</label>
         <label class="radio-option"><input type="radio" name="rotation_mode" value="gap">To, pause, to — 1, 2, 4, 5 → 2, 3, 5, 6</label>
       </fieldset>
+      {% if current_rules %}
+        <p class="muted">Spilles efter klubbens regler: <a href="/rules/{{current_rules.number}}">{{current_rules.name}}</a></p>
+      {% endif %}
       <button type="submit">Opret spilaften</button>
     </form>
   </section>

@@ -5,7 +5,8 @@
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <title>Whist</title>
         <link rel="stylesheet" href="{{ static_url('style.css') }}">
-        <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+        {# htmx 2.0.4, served by the app itself so pages make no third-party requests. #}
+        <script src="{{ static_url('htmx.min.js') }}" defer></script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     </head>
     <body>

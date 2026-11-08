@@ -55,7 +55,7 @@
     {% for s in sessions %}
       <p>
         <a href="/sessions/{{s.id}}/live">{{s.title}}</a> · <a href="/sessions/{{s.id}}/export.xlsx">Eksportér Excel</a> ·
-        {% if not member_view %}<form action="/sessions/{{s.id}}/delete" method="post" style="display:inline" onsubmit="return confirm('Slet spilaftenen og alle dens resultater permanent?')">
+        {% if not member_view and not is_final(s) %}<form action="/sessions/{{s.id}}/delete" method="post" style="display:inline" onsubmit="return confirm('Slet spilaftenen og alle dens resultater permanent?')">
           <button type="submit" class="secondary" style="padding:0.2rem 0.5rem">Slet spilaften</button>
         </form>
         {% endif %} · {{s.player_count}} spillere · {{night_time(s)}} · {{'Klub' if s.is_club else 'Uden for statistik'}} · {{'Importeret' if s.origin == 'imported' else 'Live'}}

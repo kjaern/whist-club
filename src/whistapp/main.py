@@ -22,7 +22,7 @@ from .web import (
     resolve_active_club,
     ROOT,
 )
-from .routes import accounts, admin_ai, clubs, guide, sessions, club, imports, night_edit, rules
+from .routes import accounts, admin_ai, clubs, guide, sessions, club, imports, rules
 
 
 @asynccontextmanager
@@ -105,6 +105,5 @@ app.include_router(clubs.router)
 app.include_router(guide.router)
 app.include_router(rules.router)
 app.include_router(sessions.router)
-app.include_router(night_edit.router)
 app.include_router(club.router)
 app.include_router(imports.router)

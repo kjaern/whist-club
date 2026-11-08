@@ -44,6 +44,9 @@
     <h3>
       {{ money_mode_label|default('Pladsbetaling') }}
     </h3>
+    {% if not session.ended_at %}
+      <p class="muted">Afregningen fra sidst aftenen blev afsluttet. Den gælder, indtil aftenen afsluttes igen.</p>
+    {% endif %}
     <div class="settlement-list">
       {% for item in settled %}
         <div>
@@ -73,11 +76,14 @@
     </form>
   {% else %}
     <strong>✓ Afsluttet {{night_time(session, 'ended_at')}}</strong>
-    {% if can_manage_club(request) %}
-      {# Editing changes nothing until it is saved; starting it is only logged. #}
-      <form method="post" action="/sessions/{{session.id}}/edit/start">
-        <button type="submit" class="secondary">Rediger spilaften</button>
+    {% if can_reopen(session) %}
+      <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen? Den nuværende afregning gælder, indtil du afslutter igen.')">
+        <input type="hidden" name="night_state" value="{{ night_state }}">
+        <button type="submit" class="secondary">Genåbn</button>
       </form>
+      <span class="muted">Kan genåbnes indtil {{ reopen_deadline(session) }}.</span>
+    {% elif session.origin != 'imported' %}
+      <span class="muted">Endelig; kan ikke længere genåbnes.</span>
     {% endif %}
   {% endif %}
 </div>

@@ -1,4 +1,4 @@
-"""Ordinary club members run their club's nights, including closing them; editing a closed night is for club admins."""
+"""Ordinary club members run their club's nights, including closing them and reopening them shortly after."""
 
 from fastapi.testclient import TestClient
 
@@ -20,7 +20,7 @@ def _ended(sid):
         return db.execute("SELECT ended_at FROM sessions WHERE id=?", (sid,)).fetchone()[0] is not None
 
 
-def test_ordinary_member_can_close_but_not_edit_a_night():
+def test_ordinary_member_can_close_and_reopen_a_night():
     with TestClient(app) as admin:
         admin.post("/login", data={"username": "admin", "password": "a$$word"})
         member_id, temporary = _new_login(admin, "nightmember", "Aftenmedlem")
@@ -32,13 +32,9 @@ def test_ordinary_member_can_close_but_not_edit_a_night():
             assert page.status_code == 200 and f"/sessions/{sid}/end" in page.text
             closed = member.post(f"/sessions/{sid}/end", follow_redirects=False)
             assert closed.status_code == 303 and _ended(sid)
-            # There is no reopening; editing a closed night is for club administrators.
-            closed_page = member.get(f"/sessions/{sid}").text
-            assert "/reopen" not in closed_page and "/edit/start" not in closed_page
-            for method, path in (("post", "/edit/start"), ("get", "/edit"), ("post", "/edit/calculate")):
-                assert getattr(member, method)(f"/sessions/{sid}{path}", follow_redirects=False).status_code == 403
-            assert member.put(f"/sessions/{sid}", data={}).status_code == 403
-            assert _ended(sid)
+            assert f"/sessions/{sid}/reopen" in member.get(f"/sessions/{sid}").text
+            reopened = member.post(f"/sessions/{sid}/reopen", follow_redirects=False)
+            assert reopened.status_code == 303 and not _ended(sid)
             # Deleting a night stays with club administrators.
             assert member.post(f"/sessions/{sid}/delete", follow_redirects=False).status_code == 403
     finally:
@@ -47,7 +43,7 @@ def test_ordinary_member_can_close_but_not_edit_a_night():
             db.execute("UPDATE club_members SET status='paused' WHERE id=?", (member_id,))
 
 
-def test_outsiders_cannot_close_or_edit_a_night(cleanup_clubs):  # noqa: F811
+def test_outsiders_cannot_close_or_reopen_a_night(cleanup_clubs):  # noqa: F811
     with connect() as db:
         other_club = db.execute("INSERT INTO clubs(name) VALUES ('Andenklub')").lastrowid
     with TestClient(app) as admin:
@@ -65,12 +61,12 @@ def test_outsiders_cannot_close_or_edit_a_night(cleanup_clubs):  # noqa: F811
             assert not _ended(sid)
             with connect() as db:
                 db.execute("UPDATE sessions SET ended_at=CURRENT_TIMESTAMP WHERE id=?", (sid,))
-            assert outsider.post(f"/sessions/{sid}/edit/start", follow_redirects=False).status_code in (403, 404)
+            assert outsider.post(f"/sessions/{sid}/reopen", follow_redirects=False).status_code in (403, 404)
             assert _ended(sid)
         # A login whose membership is not active has no club and cannot touch the night either.
         with TestClient(app) as paused:
             _activate(paused, "pausedmember", paused_temp)
-            assert paused.post(f"/sessions/{sid}/edit/start", follow_redirects=False).status_code == 403
+            assert paused.post(f"/sessions/{sid}/reopen", follow_redirects=False).status_code == 403
             assert _ended(sid)
     finally:
         with connect() as db:

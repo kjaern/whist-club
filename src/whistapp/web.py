@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -132,8 +132,8 @@ def member_operation_allowed(path, method):
         return (path == "/sessions" or
                 (path.startswith("/import/") and not path.startswith("/import/ai") or
                  path == "/import/ai" or path.startswith("/import/current/")) or
-                # Any active member runs the night, including closing it; editing a closed night is for club admins.
-                bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos|end)", path)))
+                # Any active member runs the night, including closing it and reopening it shortly after.
+                bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos|end|reopen)", path)))
     return False
 
 
@@ -268,6 +268,45 @@ def night_time(session, field="created_at"):
 
 templates.env.filters["local_time"] = local_time
 templates.env.globals["night_time"] = night_time
+
+
+# A closed live night can be reopened, or deleted, for this long. After that it is final:
+# its results and settlement never change, so the club's money can rely on them.
+REOPEN_HOURS = 12
+
+
+def reopen_until(session):
+    """When a closed live night becomes final (UTC); None for an open or imported night.
+
+    An imported night is corrected by importing it again, never reopened.
+    """
+    if session["ended_at"] is None or session["origin"] == "imported":
+        return None
+    try:
+        closed = datetime.strptime(str(session["ended_at"]), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)  # an unreadable time counts as long ago
+    return closed + timedelta(hours=REOPEN_HOURS)
+
+
+def can_reopen(session):
+    until = reopen_until(session)
+    return until is not None and datetime.now(timezone.utc) < until
+
+
+def is_final(session):
+    """Closed, live and past its reopen window: it can no longer be reopened or deleted."""
+    until = reopen_until(session)
+    return until is not None and datetime.now(timezone.utc) >= until
+
+
+def reopen_deadline(session):
+    """Danish time a closed night can be reopened until, for the night page."""
+    until = reopen_until(session)
+    return until and local_time(until.strftime("%Y-%m-%d %H:%M:%S"))[:16]
+
+
+templates.env.globals.update(can_reopen=can_reopen, is_final=is_final, reopen_deadline=reopen_deadline)
 
 
 def static_url(name):

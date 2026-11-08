@@ -32,8 +32,11 @@ from ..stats.data import Scope, load
 from ..stats.registry import rule_sources, statistic, topic_tables, topics_for
 from ..stats.trends import periods as trend_periods, trend
 from ..web import (
+    REOPEN_HOURS,
     can_manage_club,
+    can_reopen,
     fmt,
+    is_final,
     get_session,
     night_state_token,
     hand_round,
@@ -155,7 +158,8 @@ async def create_session(request: Request):
 @router.post("/sessions/{sid}/delete")
 def delete_session(request: Request, sid: int):
     with connect() as db:
-        get_session(db, sid)
+        if is_final(get_session(db, sid)):
+            raise HTTPException(409, f"Spilaftenen blev afsluttet for mere end {REOPEN_HOURS} timer siden og kan ikke slettes")
         db.execute("DELETE FROM sessions WHERE id=?", (sid,))
     shutil.rmtree(PHOTO_ROOT / str(sid), ignore_errors=True)
     shutil.rmtree(SOURCE_ROOT / str(sid), ignore_errors=True)
@@ -918,6 +922,31 @@ def settle_night(db, sid, collect):
     if len(_settlement(db, sid)) != len(entries):
         raise ValueError("Incomplete settlement")
     return _settlement_change(db, before, _settlement(db, sid))
+
+
+@router.post("/sessions/{sid}/reopen")
+def reopen_night(request: Request, sid: int, night_state: str = Form("")):
+    """Reopen a night closed less than REOPEN_HOURS ago. Its settlement stays until it is closed again."""
+    with connect() as db:
+        db.execute("BEGIN IMMEDIATE")  # two devices cannot both pass the checks below
+        session = get_session(db, sid)
+        if session["ended_at"] is None:
+            db.rollback()
+            return RedirectResponse(f"/sessions/{sid}", status_code=303)
+        if not can_reopen(session):
+            db.rollback()
+            return close_error(request, sid, f"Spilaftenen kan kun genåbnes i {REOPEN_HOURS} timer efter, "
+                                             "den blev afsluttet. Nu er den endelig.")
+        if _stale(db, sid, night_state):
+            db.rollback()
+            return close_error(request, sid, STALE_NIGHT)
+        db.execute("UPDATE sessions SET ended_at=NULL WHERE id=?", (sid,))
+        db.execute(
+            "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
+            (sid, request.session.get("user", "admin"),
+             "Genåbnet; afregningen gælder, indtil aftenen afsluttes igen"),
+        )
+    return RedirectResponse(f"/sessions/{sid}", status_code=303)
 
 
 @router.post("/sessions/{sid}/end")

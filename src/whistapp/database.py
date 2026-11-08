@@ -19,6 +19,10 @@ def audit_actor_set(username, account_id=None):
 def audit_actor_reset(token):
     _audit_actor.reset(token)
 
+def audit_actor():
+    """(username, account id) of whoever makes the current request."""
+    return _audit_actor.get()
+
 from pathlib import Path
 
 from .club import initial_club_name, initial_finance, initial_roster
@@ -495,3 +499,71 @@ def init_db():
         # Existing databases are changed only by explicit `whistapp migrate` steps.
         if not db.execute("SELECT 1 FROM club_rule_versions WHERE club_id=1").fetchone()                 and not db.execute("SELECT 1 FROM sessions").fetchone():
             save_version(db, 1, "opsætning")
+
+        # Klubkasse (kasse/): one kasserer per club, append-only entries, buckets, a log and alerts.
+        club_columns = {r[1] for r in db.execute("PRAGMA table_info(clubs)")}
+        if "kasserer_member_id" not in club_columns:
+            db.execute("ALTER TABLE clubs ADD COLUMN kasserer_member_id INTEGER REFERENCES club_members(id) ON DELETE SET NULL")
+        # Nights before this date are settled outside the app; NULL counts every night.
+        if "kasse_start" not in club_columns:
+            db.execute("ALTER TABLE clubs ADD COLUMN kasse_start TEXT")
+        # Startbeholdning: the club's cash on the start date.
+        if "kasse_start_cash_numerator" not in club_columns:
+            db.execute("ALTER TABLE clubs ADD COLUMN kasse_start_cash_numerator INTEGER NOT NULL DEFAULT 0")
+            db.execute("ALTER TABLE clubs ADD COLUMN kasse_start_cash_denominator INTEGER NOT NULL DEFAULT 1")
+        # When Kassens start was saved; from then on it is locked.
+        if "kasse_started_at" not in club_columns:
+            db.execute("ALTER TABLE clubs ADD COLUMN kasse_started_at TEXT")
+        db.execute("""CREATE TABLE IF NOT EXISTS kasse_buckets (
+            id INTEGER PRIMARY KEY,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        # Entries are never edited or deleted; a mistake is undone by a reversing entry.
+        # kind is checked against kasse/registry.py, so a new entry file needs no schema change.
+        db.execute("""CREATE TABLE IF NOT EXISTS kasse_entries (
+            id INTEGER PRIMARY KEY,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL,
+            member_id INTEGER REFERENCES club_members(id),
+            bucket_id INTEGER REFERENCES kasse_buckets(id),
+            amount_numerator INTEGER NOT NULL,
+            amount_denominator INTEGER NOT NULL,
+            entry_date TEXT NOT NULL,
+            note TEXT NOT NULL DEFAULT '',
+            reverses_id INTEGER UNIQUE REFERENCES kasse_entries(id),
+            actor_account_id INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_kasse_entries_club ON kasse_entries(club_id,id)")
+        db.execute("""CREATE TABLE IF NOT EXISTS kasse_log (
+            id INTEGER PRIMARY KEY,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            actor_username TEXT NOT NULL,
+            actor_account_id INTEGER,
+            action TEXT NOT NULL,
+            entity TEXT NOT NULL,
+            entity_id INTEGER,
+            before_json TEXT,
+            after_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_kasse_log_club ON kasse_log(club_id,id)")
+        # No foreign key to sessions: an alert about a deleted night must outlive it.
+        # before/after hold [member_id, numerator, denominator], never names.
+        db.execute("""CREATE TABLE IF NOT EXISTS kasse_alerts (
+            id INTEGER PRIMARY KEY,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            session_id INTEGER NOT NULL,
+            session_title TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            actor_username TEXT NOT NULL,
+            before_json TEXT NOT NULL DEFAULT '[]',
+            after_json TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            seen_at TEXT,
+            seen_by TEXT
+        )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_kasse_alerts_club ON kasse_alerts(club_id,seen_at,id)")

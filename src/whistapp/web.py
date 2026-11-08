@@ -107,7 +107,7 @@ def can_manage_club(request):
 
 # Ordinary members can view results, not mutate club data.
 def member_read_allowed(path):
-    if path in ("/statistics", "/account", "/", "/rules") or re.fullmatch(r"/rules/\d+", path) or re.fullmatch(r"/statistics/\d+(/export\.xlsx)?", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path) or re.fullmatch(r"/statistics/rules/[a-z_]+", path):
+    if path in ("/statistics", "/account", "/", "/rules", "/kasse") or re.fullmatch(r"/rules/\d+", path) or re.fullmatch(r"/statistics/\d+(/export\.xlsx)?", path) or re.fullmatch(r"/bids/[a-z_]+/rules", path) or re.fullmatch(r"/statistics/rules/[a-z_]+", path) or re.fullmatch(r"/kasse/rules/[a-z_]+", path):
         return True
     return bool(re.fullmatch(r"/sessions/\d+/(live|live/scoreboard|export\.xlsx|history|statistics|rules)", path))
 
@@ -132,6 +132,8 @@ def member_operation_allowed(path, method):
         return (path == "/sessions" or
                 (path.startswith("/import/") and not path.startswith("/import/ai") or
                  path == "/import/ai" or path.startswith("/import/current/")) or
+                # The Klubkasse route itself lets only the club's kasserer write.
+                bool(re.fullmatch(r"/kasse/(entries|entries/\d+/reverse|buckets|buckets/\d+|start|alerts/\d+/seen)", path)) or
                 # Any active member runs the night, including closing it and reopening it shortly after.
                 bool(re.fullmatch(r"/sessions/\d+/(players|players/\d+/toggle|rotation|hands|hands/\d+/(result|delete)|penalties|penalties/\d+/delete|seats|photos|end|reopen)", path)))
     return False

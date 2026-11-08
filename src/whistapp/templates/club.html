@@ -36,6 +36,11 @@
           </label>
           <span>{{ 'Klubadministrator' if member.is_club_admin else 'Medlem' }}</span>
           <button type="submit" form="role-{{ member.id }}" class="secondary">{{ 'Fjern klubadmin' if member.is_club_admin else 'Gør til klubadmin' }}</button>
+          {# The club admins choose the club's one kasserer: ticking a member moves the role, unticking leaves the club without one. #}
+          {% if can_manage_club(request) and member.status == 'active' %}
+            <label class="kasserer-choice"><input type="checkbox" form="kasserer-{{ member.id }}" name="member_id" value="{{ member.id }}"
+              {% if member.id == kasserer_id %}checked{% endif %} onchange="this.form.requestSubmit()"> Kasserer</label>
+          {% endif %}
           {% if member_logins.get(member.id) %}
             {% set login = member_logins[member.id] %}
             <span>Login: {{ login.username }} · {{ 'Afventer første login' if login.must_change_password else 'Aktiv' }}</span>
@@ -60,6 +65,7 @@
         </div>
       {% endfor %}
       <p class="muted">Et medlem kan spille uden login. Login kan oprettes senere uden at ændre medlem eller resultater.</p>
+      <p class="muted">Klubben har én kasserer, som fører <a href="/kasse">Klubkassen</a>. Sæt flueben ved <em>Kasserer</em> for at flytte rollen; det gemmes med det samme og ændrer ikke klubbens regler.</p>
       <h3>Tilføj medlem</h3>
       <div id="new-members">
         {% for name in new_members %}
@@ -165,6 +171,10 @@
     <form id="role-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/role">
       <input type="hidden" name="is_club_admin" value="{{ 0 if member.is_club_admin else 1 }}">
     </form>
+    {% if can_manage_club(request) and member.status == 'active' %}
+      {# An unticked box sends no member_id, which clears the kasserer. #}
+      <form id="kasserer-{{ member.id }}" method="post" action="/club/kasserer"></form>
+    {% endif %}
   {% endfor %}
   {# Standalone forms: never nest forms inside the main member-edit form. #}
   {% for member in members %}

@@ -531,3 +531,17 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .hof-records dl>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;border-top:1px solid #344650;padding-top:8px}
 .hof-records dt{font-weight:700}
 .hof-records dd{margin:0}
+/* Klubkasse */
+.kasse-figures{display:flex;flex-wrap:wrap;gap:1.2rem;margin:0}
+.kasse-figures dt{font-size:.85rem;opacity:.8}
+.kasse-figures dd{margin:0;font-size:1.4rem;font-weight:700}
+.kasse-form{display:flex;flex-wrap:wrap;gap:.6rem;align-items:end}
+.kasse-form label{display:flex;flex-direction:column;flex:1 1 160px}
+.kasse-form label[hidden]{display:none}
+.kasse-own td{font-weight:700}
+.kasse-alert,.kasse-bucket{border-top:1px solid rgba(127,127,127,.3);padding:.6rem 0}
+.kasse-alert.unseen{border-left:4px solid #d9a441;padding-left:.6rem}
+.kasse-rule-links .link-button{background:none;border:0;padding:0;color:inherit;text-decoration:underline;cursor:pointer;font:inherit}
+.kasse-log-line{margin:.3rem 0}
+.kasse-summary .muted{margin:.6rem 0 0}
+.kasserer-choice{display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap}

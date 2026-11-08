@@ -23,6 +23,7 @@ from ..auth import current_account, is_server_admin
 from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
+from ..kasse import ledger as kasse
 from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rule_versions import is_club_night, latest_version, night_rules, stamp_night
 from .rules import version_name
@@ -37,6 +38,7 @@ from ..web import (
     can_reopen,
     fmt,
     is_final,
+    linked_member,
     get_session,
     night_state_token,
     hand_round,
@@ -64,9 +66,10 @@ def home(request: Request):
         with connect() as db:
             roster = club_players(db, active_only=True)
             rules_now = _current_rules(db)
+            summary = _kasse_summary(db, request)
         return render(request, "home.html", sessions=sessions,
                       default_title=date.today().isoformat(), club_players=roster,
-                      member_view=not can_manage_club(request), current_rules=rules_now)
+                      member_view=not can_manage_club(request), current_rules=rules_now, kasse=summary)
     with connect() as db:
         sessions = db.execute(
             "SELECT sessions.*, (SELECT COUNT(*) FROM players WHERE players.session_id=sessions.id) AS player_count FROM sessions WHERE club_id=? ORDER BY sessions.id DESC",
@@ -74,6 +77,7 @@ def home(request: Request):
         ).fetchall()
         roster = club_players(db, active_only=True)
         rules_now = _current_rules(db)
+        summary = _kasse_summary(db, request)
     return render(
         request,
         "home.html",
@@ -81,7 +85,18 @@ def home(request: Request):
         default_title=date.today().isoformat(),
         club_players=roster,
         current_rules=rules_now,
+        kasse=summary,
     )
+
+
+def _kasse_summary(db, request):
+    """The club's cash, the member's own balance and, for the kasserer, unseen alerts; shown on Spilaftener."""
+    member = linked_member(request)
+    found = kasse.kasserer(db, active_club_id())
+    books = kasse.balances(db, active_club_id())
+    return dict(cash=books["cash"],
+                own=kasse.member_balance(books, member["id"]) if member else None,
+                alerts=kasse.unseen_alerts(db, active_club_id()) if member and found and found["id"] == member["id"] else 0)
 
 
 def _current_rules(db):
@@ -147,7 +162,8 @@ def delete_session(request: Request, sid: int):
     with connect() as db:
         if is_final(get_session(db, sid)):
             raise HTTPException(409, f"Spilaftenen blev afsluttet for mere end {REOPEN_HOURS} timer siden og kan ikke slettes")
-        db.execute("DELETE FROM sessions WHERE id=?", (sid,))
+        with kasse.watch(db, sid, "delete"):
+            db.execute("DELETE FROM sessions WHERE id=?", (sid,))
     shutil.rmtree(PHOTO_ROOT / str(sid), ignore_errors=True)
     shutil.rmtree(SOURCE_ROOT / str(sid), ignore_errors=True)
     return RedirectResponse("/", status_code=303)
@@ -934,7 +950,11 @@ def reopen_night(request: Request, sid: int, night_state: str = Form("")):
         if _stale(db, sid, night_state):
             db.rollback()
             return close_error(request, sid, STALE_NIGHT)
+        # The kasserer is told; what the night charges afterwards is filled in when it is closed again.
+        before = kasse.snapshot(db, sid)
         db.execute("UPDATE sessions SET ended_at=NULL WHERE id=?", (sid,))
+        if before:
+            kasse.add_alert(db, sid, "reopen", before, None)
         db.execute(
             "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
             (sid, request.session.get("user", "admin"),
@@ -969,6 +989,7 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
                 "UPDATE sessions SET is_club=?,collect_club_money=?,ended_at=CURRENT_TIMESTAMP WHERE id=?",
                 (int(is_club), int(collect), sid),
             )
+            kasse.complete_reopen_alert(db, sid)
             if change:
                 db.execute(
                     "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",

@@ -16,6 +16,7 @@
     {% set club = active_club(request) %}
     {% if club %}<a href="/clubs">{{ club.name }}{% if club.choices > 1 %} · Skift klub{% endif %}</a>{% else %}<a href="/clubs">Vælg klub</a>{% endif %}
     {% if club %}<a href="/statistics">Statistik</a>{% endif %}
+    {% if club %}<a href="/kasse">Klubkasse</a>{% endif %}
     {% if ai_import_allowed() %}<a href="/import/current">Aktuelle importer</a>{% endif %}
     {% if can_manage_club(request) %}<a href="/club">Klubadministration</a>{% endif %}
     {% if request.session.get("user") == "admin" %}<a href="/admin/accounts">Serveradministration</a>{% endif %}

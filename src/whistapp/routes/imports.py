@@ -21,6 +21,7 @@ from whistapp.bids.registry import registered_bids
 from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
 from ..database import connect
+from ..kasse import ledger as kasse
 from ..finance import settlement_entries
 from ..rule_versions import club_versions, is_club_night, night_rules, stamp_night
 from .rules import version_name
@@ -1541,8 +1542,15 @@ async def import_commit(request: Request):
         permanent_sources.extend(_ai_source_files(data.get("ai_token", "")))
         with connect() as db:
             version = import_rule_version(form.get("rule_version"))
-            sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
-            _set_import_money(db, sid, bool(form.get("collect_club_money")))
+            if replace_id:
+                # Saved over an existing night: what it charged before is compared with now.
+                with kasse.watch(db, replace_id, "import"):
+                    sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
+                    _set_import_money(db, sid, bool(form.get("collect_club_money")))
+            else:
+                sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
+                _set_import_money(db, sid, bool(form.get("collect_club_money")))
+                kasse.add_alert(db, sid, "import", [], kasse.snapshot(db, sid))
             _save_photos(db, sid, _staged_photos(data.get("pending_photos", "")))
             db.execute(
                 "UPDATE sessions SET date_precision=? WHERE id=?", (date_precision, sid)
@@ -1646,6 +1654,7 @@ async def import_final(request: Request):
 
         db.execute("UPDATE sessions SET is_club=? WHERE id=?", (int(is_club_night(db, sid)), sid))
         _set_import_money(db, sid, bool(form.get("collect_club_money")))
+        kasse.add_alert(db, sid, "import", [], kasse.snapshot(db, sid))
     return RedirectResponse(f"/sessions/{sid}/live", status_code=303)
 
 
@@ -1731,7 +1740,8 @@ async def update_session_money(request: Request, sid: int):
         if session["origin"] != "imported":
             raise HTTPException(400, "Kun historiske importer kan ændres her")
         try:
-            _set_import_money(db, sid, enabled)
+            with kasse.watch(db, sid, "money"):
+                _set_import_money(db, sid, enabled)
         except ValueError as exc:
             raise HTTPException(400, str(exc))
     return RedirectResponse(f"/sessions/{sid}", status_code=303)

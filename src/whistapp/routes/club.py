@@ -12,6 +12,7 @@ from ..auth import is_server_admin
 from ..club import active_club_id, club_settings
 from ..database import connect
 from ..finance import MONEY_MODES
+from ..kasse import ledger as kasse
 from ..rule_versions import save_version
 from ..rules import bid_classes, bid_type_order
 from ..web import can_manage_club, fmt, render
@@ -58,6 +59,7 @@ def _club_page_context(request, db, form=None):
         "member_logins": member_logins,
         "can_reset_invites": can_manage_club(request),
         "server_admin": is_server_admin(request),
+        "kasserer_id": db.execute("SELECT kasserer_member_id FROM clubs WHERE id=?", (active_club_id(),)).fetchone()[0],
         "unlinked_accounts": unlinked_accounts,
         "club_name": str(form.get("club_name")) if form is not None and form.get("club_name") is not None
         else db.execute("SELECT name FROM clubs WHERE id=?", (active_club_id(),)).fetchone()[0],
@@ -325,6 +327,7 @@ async def save_club(request: Request):
             if club_name is not None:
                 db.execute("UPDATE clubs SET name=? WHERE id=?", (club_name, active_club_id()))
             save_version(db, active_club_id())
+            kasse.drop_inactive_kasserer(db, active_club_id())
             db.execute("DELETE FROM club_member_aliases WHERE club_id=?", (active_club_id(),))
             db.executemany(
                 "INSERT INTO club_member_aliases(member_id,club_id,alias) VALUES (?,?,?)",

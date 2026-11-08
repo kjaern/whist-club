@@ -13,6 +13,7 @@
     <li><strong>Importere en spilaften</strong> fra Excel{% if ai_import_allowed() %} eller fotos af regnskabsarket (AI-import){% endif %} via <a href="/import">Importer spilaften</a>. Aftenen får klubbens nuværende regler; vælg en tidligere version under <em>Brug regler</em>, hvis aftenen blev spillet efter andre regler.</li>
     <li><strong>Se reglerne</strong>: <em>Regler for aftenen</em> på en spilaften viser betaling, Fejl40, meldinger og medlemsliste, som aftenen spilles efter. <a href="/rules">Regelhistorik</a> viser alle klubbens regelversioner, og hvad hver ændrede.</li>
     <li><strong>Se statistik og ændringshistorik</strong>, og eksportere en aften eller et år som Excel.</li>
+    <li><strong>Se <a href="/kasse">Klubkassen</a></strong>: din egen saldo, alle medlemmers saldi, kassebeholdning, puljer, posteringer og kassens log.</li>
     <li><strong>Skifte sin adgangskode</strong> under <a href="/account">Min konto</a>.</li>
   </ul>
 </section>
@@ -41,6 +42,31 @@
 </section>
 
 <section class="card">
+  <h2>Klubkasse</h2>
+  <p>Alle medlemmer kan se <a href="/kasse">Klubkassen</a>. Kun klubbens <strong>kasserer</strong> kan bogføre i den. Klubben har én kasserer, og klubadministratorerne vælger, hvem det er.</p>
+  <ul>
+    <li><strong>Saldo</strong>: negativ betyder, at medlemmet skylder klubben penge; positiv, at medlemmet har penge til gode. Den er summen af kolonnerne <em>Spilaftener</em> (pladsbetaling), <em>Fejl40</em> og <em>Posteringer</em>. Din egen saldo står også på forsiden.</li>
+    <li><strong>Spilaftener tæller</strong>, så snart de er afsluttet med klubkasse. Aftener med gæster, uden klubkasse eller før kassens startdato tæller ikke. Betaler spillerne hinanden direkte (betalingsform efter slutscore), går kun Fejl40 til kassen.</li>
+    <li><strong>Posteringer</strong>: <em>Indbetaling</em> (et medlem betaler til kassen), <em>Udbetaling</em> (kassen betaler et medlem), <em>Udgift</em> (klubben bruger penge, evt. fra en pulje) og <em>Korrektion</em> (retter et medlems saldo eller kassen; skal have en forklaring).</li>
+    <li><strong>En postering kan ikke rettes eller slettes.</strong> En fejl rettes med <em>Tilbagefør</em>, som bogfører det modsatte, eller med en korrektion.</li>
+    <li><strong>Puljer</strong> samler udgifter til et formål, fx en tur. Kendes rejsemålet ikke endnu, så giv puljen et neutralt navn som "Udlandstur 2027", og omdøb den bagefter.</li>
+    <li><strong>Kassens start</strong> (startdato og startbeholdning) sætter kassereren én gang. Derefter er den låst, og alt rettes med korrektioner. Medlemmernes startsaldi bogføres som korrektioner.</li>
+    <li><strong>Vis regel</strong> ved <em>Medlemmer</em>, <em>Ny postering</em> og <em>Posteringer</em> viser den kode, der beregner beløbene.</li>
+    <li><strong>Loggen</strong> nederst viser for alle, hvem der har gjort hvad i kassen og hvornår.</li>
+  </ul>
+  <h3>Ændrede spilaftener</h3>
+  <p>Kassereren får besked, når en spilaften, som kassen allerede tæller med, ændrer det, den koster medlemmerne:</p>
+  <ul>
+    <li><strong>Genåbnet</strong>: en afsluttet aften genåbnes. De nye beløb vises, når aftenen afsluttes igen; er intet ændret, forsvinder beskeden.</li>
+    <li><strong>Slettet</strong>: en aften, der har kostet penge, slettes.</li>
+    <li><strong>Importeret</strong>: en aften importeres eller importeres igen oven i en eksisterende.</li>
+    <li><strong>Klubkasse slået til/fra</strong> på en importeret aften.</li>
+  </ul>
+  <p>Beskederne står under <em>Ændrede spilaftener</em> på Klubkassen, lige efter Puljer, og kun kassereren og serveradministratoren ser dem. På forsiden ser kassereren, hvor mange der venter. Hver besked viser for hvert medlem betalingen før og efter og forskellen. Kassereren trykker <em>Set</em>, når den er gennemgået; skal noget rettes, sker det med en korrektion.</p>
+  <p class="muted">Første gang en aften afsluttes, kommer der ingen besked; den tæller bare med.</p>
+</section>
+
+<section class="card">
   <h2>Klubber</h2>
   <ul>
     <li><strong>Skift klub</strong> ved at trykke på klubbens navn øverst på siden. Er du kun med i én klub, vælges den automatisk.</li>
@@ -56,6 +82,7 @@
     <li>Tilføje medlemmer, rette navne og aliasnavne (bruges ved import), og sætte medlemmer inaktive. Et medlem kan spille uden login.</li>
     <li>Oprette login til et medlem. Det giver en midlertidig adgangskode, som medlemmet skifter ved første login. <em>Nulstil invitation</em> giver en ny, hvis den er glemt.</li>
     <li>Gøre andre til klubadministrator eller fjerne rollen.</li>
+    <li>Vælge klubbens kasserer med fluebenet <em>Kasserer</em> ved medlemmet. Det gemmes med det samme og ændrer ikke klubbens regler.</li>
     <li>Vælge betalingsform (pladsbetaling eller kr. pr. point), satser og Fejl40.</li>
     <li>Vælge hvilke meldinger klubben spiller, deres værdier og deres rækkefølge (▲▼).</li>
     <li>Slette en spilaften fra forsiden, så længe den er åben eller afsluttet for under 12 timer siden; importerede aftener kan altid slettes eller rettes ved at importere dem igen. Rette betalingen på importerede aftener og fjerne uploadede originalark.</li>

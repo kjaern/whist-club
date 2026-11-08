@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Klubkasse</h1>
+  <p><a href="/">← Spilaftener</a></p>
+  <p class="muted">
+    {% if kasserer %}Kasserer: <strong>{{ kasserer.name }}</strong>.{% else %}Klubben har ingen kasserer endnu; en klubadministrator vælger én under Klubadministration.{% endif %}
+    Negativ saldo betyder, at medlemmet skylder klubben penge; positiv, at medlemmet har penge til gode.
+  </p>
+  {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+  {% if saved %}<p role="status">Gemt.</p>{% endif %}
+
+  <section class="card kasse-summary">
+    <h2>Status</h2>
+    <dl class="kasse-figures">
+      <div><dt>Kassebeholdning</dt><dd>{{ fmt(books.cash) }} kr</dd></div>
+      <div><dt>Medlemmer skylder</dt><dd>{{ fmt(books.owed_to_club) }} kr</dd></div>
+      <div><dt>Klubben skylder</dt><dd>{{ fmt(books.owed_by_club) }} kr</dd></div>
+    </dl>
+    <p class="muted">
+      {% if not books.started %}Kassens start er ikke sat endnu; indtil da tæller alle afsluttede spilaftener med klubkasse.
+      {% elif books.kasse_start %}Kassen startede {{ books.kasse_start }} med startbeholdning {{ fmt(books.start_cash) }} kr; spilaftener fra den dato tæller med.
+      {% else %}Kassen startede med {{ fmt(books.start_cash) }} kr, og alle afsluttede spilaftener med klubkasse tæller med.{% endif %}
+    </p>
+  </section>
+
+  {% if is_kasserer and not books.started %}
+    <section class="card">
+      <h2>Kassens start</h2>
+      <form method="post" action="/kasse/start" class="kasse-form"
+            onsubmit="return confirm('Kassens start kan ikke ændres, når den er gemt. Senere fejl rettes med korrektioner. Gem?')">
+        <label>Spilaftener fra<input type="date" name="kasse_start"></label>
+        <label>Startbeholdning (kr)<input name="start_cash" inputmode="decimal" placeholder="0"></label>
+        <button type="submit">Gem og lås start</button>
+      </form>
+      <p class="muted">Sæt dette én gang, før du bogfører. Aftener før datoen er gjort op uden for appen, og startbeholdningen er det, kassen havde den dag. Tom dato: alle aftener tæller. Medlemmernes startsaldi bogføres bagefter som korrektioner. Når starten er gemt, er den låst.</p>
+    </section>
+  {% endif %}
+
+  <section class="card">
+    <div class="stats-section-heading">
+      <h2>Medlemmer</h2>
+      <button type="button" class="secondary kasse-rule" data-key="aftener" aria-haspopup="dialog">Vis regel</button>
+    </div>
+    <div class="stat-scroll">
+      <table>
+        <thead><tr><th>Medlem</th><th>Spilaftener</th><th>Fejl40</th><th>Posteringer</th><th>Saldo</th></tr></thead>
+        <tbody>
+          {% for m in books.members %}
+            <tr{% if m.id == own_id %} class="kasse-own"{% endif %}>
+              <td>{{ m.name }}{% if m.status != 'active' %} <span class="muted">(inaktiv)</span>{% endif %}</td>
+              <td>{{ fmt(m.nights) }}</td><td>{{ fmt(m.fejl40) }}</td><td>{{ fmt(m.entries) }}</td><td><strong>{{ fmt(m.balance) }}</strong></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {% if is_kasserer %}
+    <section class="card">
+      <div class="stats-section-heading">
+        <h2>Ny postering</h2>
+        <button type="button" class="secondary kasse-rule" id="kasse-kind-rule" data-key="{{ entry_types[0].key }}" aria-haspopup="dialog">Vis regel</button>
+      </div>
+      <form method="post" action="/kasse/entries" class="kasse-form" id="kasse-entry-form">
+        <label>Type
+          <select name="kind" id="kasse-kind">
+            {% for t in entry_types %}<option value="{{ t.key }}" data-target="{{ t.target }}" {% if form.get('kind') == t.key %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
+          </select>
+        </label>
+        <label data-for="member member_or_cash">Medlem
+          <select name="member_id">
+            <option value="" data-for="member_or_cash">Klubkassen (intet medlem)</option>
+            {% for m in active_members %}<option value="{{ m.id }}" {% if form.get('member_id') == m.id|string %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label data-for="bucket">Pulje
+          <select name="bucket_id">
+            <option value="">Ingen pulje</option>
+            {% for b in buckets %}<option value="{{ b.id }}" {% if form.get('bucket_id') == b.id|string %}selected{% endif %}>{{ b.name }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Beløb (kr)<input name="amount" inputmode="decimal" required value="{{ form.get('amount', '') }}" placeholder="125,50"></label>
+        <label>Dato<input type="date" name="entry_date" value="{{ form.get('entry_date', today) }}"></label>
+        <label>Forklaring<input name="note" maxlength="500" value="{{ form.get('note', '') }}"></label>
+        <button type="submit">Bogfør</button>
+      </form>
+      <p class="muted"><span id="kasse-kind-help"></span> Posteringer kan ikke rettes eller slettes; en fejl rettes med Tilbagefør.</p>
+    </section>
+  {% endif %}
+
+  {% if is_kasserer %}
+    <section class="card">
+      <h2>Ny pulje</h2>
+      <form method="post" action="/kasse/buckets" class="kasse-form">
+        <label>Navn<input name="name" required maxlength="80" placeholder="Udlandstur 2027"></label>
+        <label>Note<input name="note" maxlength="500"></label>
+        <button type="submit">Opret pulje</button>
+      </form>
+    </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Puljer</h2>
+    <p class="muted">Penge, klubben har brugt til et formål, fx en tur. Kendes rejsemålet ikke endnu, så giv puljen et neutralt navn som "Udlandstur 2027", og omdøb den bagefter.</p>
+    {% for b in buckets %}
+      <div class="kasse-bucket">
+        <strong>{{ b.name }}</strong> · brugt {{ fmt(b.spent) }} kr
+        {% if b.note %}<span class="muted"> · {{ b.note }}</span>{% endif %}
+        {% if is_kasserer %}
+          <details><summary>Ret pulje</summary>
+            <form method="post" action="/kasse/buckets/{{ b.id }}" class="kasse-form">
+              <label>Navn<input name="name" value="{{ b.name }}" required maxlength="80"></label>
+              <label>Note<input name="note" value="{{ b.note }}" maxlength="500"></label>
+              <button type="submit">Gem pulje</button>
+            </form>
+          </details>
+        {% endif %}
+      </div>
+    {% else %}
+      <p>Ingen puljer endnu.</p>
+    {% endfor %}
+  </section>
+
+  {% if insider and alerts %}
+    <section class="card">
+      <h2>Ændrede spilaftener</h2>
+      <p class="muted">Kun kassereren og serveradministratoren ser dette. En spilaften, der allerede talte med i kassen, er ændret.</p>
+      {% for alert in alerts %}
+        <div class="kasse-alert{% if not alert.seen_at %} unseen{% endif %}">
+          <strong>{{ alert.kind_label }}</strong> · {{ alert.session_title }} · {{ local_time(alert.created_at) }} · {{ alert.actor_username }}
+          {% if alert.pending %}<p class="muted">Aftenen er genåbnet; de nye beløb kendes, når den afsluttes igen.</p>{% endif %}
+          {% if alert.changes %}
+            <table>
+              <tr><th>Medlem</th><th>Betaling før</th><th>Betaling efter</th><th>Forskel</th></tr>
+              {% for c in alert.changes %}
+                <tr><td>{{ c.name }}</td><td>{{ fmt(c.before) }}</td><td>{% if c.after is not none %}{{ fmt(c.after) }}{% else %}?{% endif %}</td><td>{% if c.diff is not none %}{{ fmt(c.diff) }}{% endif %}</td></tr>
+              {% endfor %}
+            </table>
+          {% endif %}
+          {% if is_kasserer and not alert.seen_at %}
+            <form method="post" action="/kasse/alerts/{{ alert.id }}/seen"><button type="submit" class="secondary">Set</button></form>
+          {% elif alert.seen_at %}<p class="muted">Set af {{ alert.seen_by }} {{ local_time(alert.seen_at) }}</p>{% endif %}
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Posteringer</h2>
+    <p class="muted kasse-rule-links">Regler:
+      {% for t in entry_types %}<button type="button" class="link-button kasse-rule" data-key="{{ t.key }}" aria-haspopup="dialog">{{ t.label }}</button>{% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+    <div class="stat-scroll">
+      <table>
+        <thead><tr><th>#</th><th>Dato</th><th>Type</th><th>Medlem / pulje</th><th>Beløb</th><th>Forklaring</th>{% if is_kasserer %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+          {% for e in entries %}
+            <tr{% if e.reversed or e.reverses_id %} class="muted"{% endif %}>
+              <td>{{ e.id }}</td><td>{{ e.entry_date }}</td>
+              <td>{{ e.kind_label }}{% if e.reverses_id %} (tilbageførsel af #{{ e.reverses_id }}){% endif %}{% if e.reversed %} (tilbageført){% endif %}</td>
+              <td>{{ e.member_name or e.bucket_name or ('Klubkassen' if e.kind == 'korrektion' else '') }}</td>
+              <td>{{ fmt(e.amount) }}</td><td>{{ e.note }}</td>
+              {% if is_kasserer %}<td>{% if not e.reversed and not e.reverses_id %}
+                <form method="post" action="/kasse/entries/{{ e.id }}/reverse" onsubmit="return confirm('Tilbagefør postering #{{ e.id }}?')"><button type="submit" class="secondary">Tilbagefør</button></form>
+              {% endif %}</td>{% endif %}
+            </tr>
+          {% else %}
+            <tr><td colspan="7">Ingen posteringer endnu.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Log</h2>
+    <p class="muted">Hvem gjorde hvad i kassen og hvornår.</p>
+    {% for row in log %}
+      <p class="kasse-log-line">{{ local_time(row.created_at) }} · <strong>{{ row.actor }}</strong> {{ row.text }}</p>
+    {% else %}
+      <p>Loggen er tom.</p>
+    {% endfor %}
+  </section>
+
+  <dialog id="kasse-rule-dialog" class="rules-dialog" aria-labelledby="kasse-rule-title">
+    <div class="rules-dialog-heading">
+      <strong id="kasse-rule-title">Kassens regel</strong><button type="button" class="secondary" id="close-kasse-rule" aria-label="Luk regel">Luk ×</button>
+    </div>
+    <div id="kasse-rule-panel"></div>
+  </dialog>
+  <script>
+  (() => {
+    // Vis regel: the code that computes an entry type, as Vis regler shows a bid's code.
+    const dialog = document.getElementById('kasse-rule-dialog'), panel = document.getElementById('kasse-rule-panel');
+    document.addEventListener('click', async event => {
+      const button = event.target.closest('.kasse-rule');
+      if (!button) return;
+      panel.textContent = 'Indlæser regel…';
+      dialog.showModal();
+      try {
+        const response = await fetch('/kasse/rules/' + encodeURIComponent(button.dataset.key));
+        panel.innerHTML = response.ok ? await response.text() : 'Reglen kunne ikke indlæses.';
+      } catch (_) { panel.textContent = 'Reglen kunne ikke indlæses.'; }
+    });
+    document.getElementById('close-kasse-rule').addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });
+
+    // Show only the fields the chosen entry type uses; Vis regel follows the chosen type.
+    const kind = document.getElementById('kasse-kind');
+    if (!kind) return;
+    const help = {{ entry_types|map(attribute='description')|list|tojson }};
+    const form = document.getElementById('kasse-entry-form');
+    function update() {
+      const target = kind.selectedOptions[0].dataset.target;
+      form.querySelectorAll('label[data-for]').forEach(label => { label.hidden = !label.dataset.for.split(' ').includes(target); });
+      const cashOption = form.querySelector('option[data-for="member_or_cash"]');
+      cashOption.hidden = target !== 'member_or_cash';
+      const member = form.querySelector('[name=member_id]');
+      if (target === 'member' && member.value === '') member.selectedIndex = 1;
+      document.getElementById('kasse-kind-help').textContent = help[kind.selectedIndex];
+      document.getElementById('kasse-kind-rule').dataset.key = kind.value;
+    }
+    kind.addEventListener('change', update);
+    update();
+  })();
+  </script>
+{% endblock %}

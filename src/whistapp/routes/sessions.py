@@ -154,10 +154,17 @@ def delete_session(request: Request, sid: int):
 
 
 def _statistics_page(request, db, scope, topic, **context):
-    """One page for every scope: topic tabs over the registered statistics."""
+    """One page for every scope: topic tabs over the registered statistics.
+
+    A page topic (Hall of Fame) builds its own content from the same data instead of tables.
+    """
     data = load(db, scope)
     topics = topics_for(scope.kind)
     current = next((t for t in topics if t.key == topic), topics[0])
+    if current.build:
+        return render(request, "statistics.html", scope=scope, topics=topics, topic=current,
+                      topic_data=current.build(data), tables=[], trends={}, origin=scope.origin,
+                      stat_cell=stat_cell, **context)
     tables = topic_tables(current, data)
     sub_periods = trend_periods(data)
     trends = {stat.key: trend(stat, table, data, sub_periods) for stat, table in tables}

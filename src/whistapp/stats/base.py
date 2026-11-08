@@ -75,6 +75,14 @@ class Statistic:
 
 @dataclass
 class Topic:
+    """A tab: registered statistics shown as tables, or a page of its own.
+
+    A page topic has no statistics; `build(data)` computes what its template `page` shows,
+    on the scope kinds in `scopes`.
+    """
     key: str
     label: str
     statistics: list = field(default_factory=list)
+    scopes: tuple = ()
+    page: str = ""
+    build: object = None

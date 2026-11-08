@@ -503,3 +503,31 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 /* Rules pages: placements and bids. */
 .rule-table{border-collapse:collapse}
 .rule-table th,.rule-table td{text-align:left;padding:.25rem .9rem .25rem 0;vertical-align:top}
+
+/* Hall of Fame */
+.hof-hero{text-align:center;padding:22px 12px 14px;margin:8px 0 6px;border-radius:16px;background:radial-gradient(circle at 50% 0,#4a3d16 0,#1c2c35 70%);border:1px solid #6b5a22}
+.hof-hero h2{margin:0;font-size:2rem;color:#f4d27a}
+.hof-hero p{margin:6px 0 0;color:#e8dcb5;font-style:italic}
+.hof-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,330px),1fr));gap:14px;margin:14px 0}
+.hof-card{background:linear-gradient(160deg,#22343e,#1a2830);border:1px solid #5c4f22;border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.hof-card.hof-vacant{border-color:#344650;opacity:.85}
+.hof-card-head{display:flex;gap:12px;align-items:flex-start}
+.hof-card h3{margin:0;font-size:1.15rem;color:#f4d27a}
+.hof-vacant h3{color:#c9d4da}
+.hof-icon{font-size:2.1rem;line-height:1}
+.hof-tagline{margin:3px 0 0;color:#aabcc5;font-size:.9rem;font-style:italic}
+.hof-holder{background:#10212a;border-radius:10px;padding:10px 12px;display:grid;gap:3px;overflow-wrap:anywhere}
+.hof-name{font-weight:800;font-size:1.15rem}
+.hof-value{font-size:1.45rem;font-weight:800;color:#72d7b4}
+.hof-detail,.hof-extra{font-size:.88rem;color:#c9d4da}
+.hof-extra{margin:0}
+.hof-link{font-size:.88rem}
+.hof-shared{margin:0;font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#f4d27a}
+.hof-empty{margin:0;color:#aabcc5}
+.hof-how{margin-top:auto;font-size:.85rem;color:#aabcc5}
+.hof-how summary{color:#c9d4da}
+.hof-how p{margin:6px 0 0}
+.hof-records dl{margin:0;display:grid;gap:8px}
+.hof-records dl>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px;border-top:1px solid #344650;padding-top:8px}
+.hof-records dt{font-weight:700}
+.hof-records dd{margin:0}

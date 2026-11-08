@@ -3,6 +3,7 @@
 To add a statistic: write a Statistic subclass in its own file and list it here.
 """
 
+from .. import hall_of_fame
 from .base import Topic
 from .bids_by_member import BidsByMember
 from .bids_played import BidsPlayed
@@ -23,6 +24,9 @@ TOPICS = [
     Topic("makkerpar", "Makkerpar", [PartnerPairs(), SelfPartner(), MemberSpecials()]),
     Topic("rekorder", "Rekorder", [Streaks(), Extremes(), ClubRhythm()]),
     Topic("placeringer", "Placeringer", [Placements(), NightGrid()]),
+    # Club titles and records, computed by hall_of_fame.py rather than as tables.
+    Topic("hall-of-fame", "🏆 Hall of Fame", scopes=("all", "year"),
+          page="partials/hall_of_fame.html", build=hall_of_fame.compute),
 ]
 
 
@@ -50,8 +54,8 @@ def rule_sources(stat):
 
 
 def topics_for(kind):
-    """Topics with at least one statistic that makes sense for the scope kind."""
-    return [t for t in TOPICS if any(kind in s.scopes for s in t.statistics)]
+    """Topics with a page or at least one statistic that makes sense for the scope kind."""
+    return [t for t in TOPICS if kind in t.scopes or any(kind in s.scopes for s in t.statistics)]
 
 
 def topic_tables(topic, data):

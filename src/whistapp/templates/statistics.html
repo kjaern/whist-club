@@ -40,6 +40,7 @@
       <a href="{{ base_url }}?{{ query }}topic={{ t.key }}" {% if t.key == topic.key %}class="active" aria-current="page"{% endif %}>{{ t.label }}</a>
     {% endfor %}
   </nav>
+  {% if topic.page %}{% include topic.page %}{% endif %}
   {% for stat, table in tables %}
     <section class="card">
       <div class="stats-section-heading">

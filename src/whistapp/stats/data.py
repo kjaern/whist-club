@@ -63,6 +63,7 @@ class NightRecord:
     year: str
     date: str  # Danish display date
     collect_club_money: bool
+    closed: bool = False  # ended_at is set; a reopened night is open again
     final_scores: dict = field(default_factory=dict)  # player id -> Fraction (final-only imports)
     penalties: list = field(default_factory=list)  # (player id, amount), only when money is collected
     settlements: dict = field(default_factory=dict)  # member id -> Fraction
@@ -138,7 +139,7 @@ def load(db, scope, roster=None):
         nights[r["id"]] = NightRecord(
             id=r["id"], title=r["title"], created_at=r["created_at"], origin=r["origin"],
             year=str(r["created_at"])[:4], date=night_time(r)[:10],
-            collect_club_money=bool(r["collect_club_money"]),
+            collect_club_money=bool(r["collect_club_money"]), closed=r["ended_at"] is not None,
         )
 
     players = {

@@ -1,0 +1,57 @@
+{% set hof = topic_data %}
+<section class="hof-hero">
+  <h2>🏆 Hall of Fame</h2>
+  <p>Whistkongernes helte, syndebukke og legender</p>
+</section>
+<p class="muted">
+  {% if hof.nights %}Bygger på {{ hof.nights }} afsluttede klubaftener{% if hof.year %} i {{ hof.year }}{% endif %}. Kun aftener, man selv spillede, tæller for en spiller.
+  {% else %}Ingen afsluttede klubaftener {% if hof.year %}i {{ hof.year }}{% else %}endnu{% endif %}, så alle titler er ledige.{% endif %}
+</p>
+
+<div class="hof-grid">
+  {% for award in hof.awards %}
+    <article class="hof-card{% if award.vacant %} hof-vacant{% endif %}" id="{{ award.key }}">
+      <div class="hof-card-head">
+        <span class="hof-icon" aria-hidden="true">{{ award.icon }}</span>
+        <div>
+          <h3>{{ award.title }}</h3>
+          <p class="hof-tagline">{{ award.tagline }}</p>
+        </div>
+      </div>
+      {% if award.vacant %}
+        <p class="hof-empty">{{ award.empty }}</p>
+      {% else %}
+        {% if award.shared %}<p class="hof-shared">Delt titel</p>{% endif %}
+        {% for h in award.holders %}
+          <div class="hof-holder">
+            <div class="hof-name">{{ h.name }}</div>
+            <div class="hof-value">{{ h.value_text }}</div>
+            {% if h.detail %}<div class="hof-detail">{{ h.detail }}</div>{% endif %}
+            {% if h.link %}<a class="hof-link" href="{{ h.link }}">{{ h.link_text }} →</a>{% endif %}
+          </div>
+        {% endfor %}
+      {% endif %}
+      {% for line in award.extra %}<p class="hof-extra">{{ line }}</p>{% endfor %}
+      <details class="hof-how">
+        <summary>ⓘ Sådan beregnes det</summary>
+        <p>{{ award.explanation }}</p>
+      </details>
+    </article>
+  {% endfor %}
+</div>
+
+<section class="card hof-records">
+  <h2>🏆 Klubrekorder{% if hof.year %} · {{ hof.year }}{% endif %}</h2>
+  <dl>
+    {% for label, award in hof.records %}
+      <div>
+        <dt>{{ label }}</dt>
+        <dd>
+          {% if award.vacant %}<span class="muted">Ledig</span>
+          {% else %}<strong>{{ award.holders[0].value_text }}</strong> · {{ award.holders | map(attribute='name') | join(' og ') }}{% endif %}
+          <a href="#{{ award.key }}" aria-label="Se {{ award.title }}">↑</a>
+        </dd>
+      </div>
+    {% endfor %}
+  </dl>
+</section>

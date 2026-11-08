@@ -16,7 +16,7 @@
       <h2>Hænder</h2>
       {% for row in rows %}
         {% set h = 'h' ~ row.hand.id ~ '_' %}
-        {% set kind = rules.bids[row.hand.bid_key].target %}
+        {% set kind = rules.bids[row.hand.bid_key].target if row.hand.bid_key in rules.bids else none %}
         <details class="row-editor night-edit-hand">
           <summary>
             Hånd {{row.number}} · {{row.hand.bid_label}}{% if row.hand.target %} {{row.hand.target}}{% endif %}
@@ -24,7 +24,12 @@
             {% if row.hand.actual is not none %}· {{row.hand.actual}} stik{% endif %}
           </summary>
           <div class="editor-panel">
-            <label>Melder<select name="{{h}}declarer" required>
+            {% if row.hand.bid_key not in rules.bids %}
+            {# A bid the importer could not recognise: its scores come from the sheet, so it is only kept or deleted. #}
+            <p class="muted">Meldingen kunne ikke genkendes ved importen; pointene er arkets egne. Hånden kan kun slettes.</p>
+            {% else %}
+            <label>Melder<select name="{{h}}declarer" {% if row.declarer is not none %}required{% endif %}>
+              {% if row.declarer is none %}<option value="" selected>Ingen melder registreret</option>{% endif %}
               {% for p in players if p.id in row.participants %}
                 <option value="{{p.id}}" {% if p.id==row.declarer %}selected{% endif %}>{{p.name}}</option>
               {% endfor %}
@@ -65,6 +70,7 @@
                 </select></label>
               {% endfor %}
             </div>
+            {% endif %}
             <label class="night-edit-delete"><input type="checkbox" name="{{h}}delete" value="1"> Slet hånd {{row.number}}</label>
           </div>
         </details>

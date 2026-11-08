@@ -728,13 +728,18 @@ def hand_result(db, session, hand, get, getlist):
     rules = load_rules(session_bid_settings(db, session))["bids"]
     participants = [r[0] for r in db.execute(
         "SELECT player_id FROM hand_participants WHERE hand_id=?", (hid,))]
-    original_declarer = db.execute(
-        "SELECT player_id FROM hand_declarers WHERE hand_id=?", (hid,)).fetchone()[0]
+    # An imported hand may have no declarer recorded.
+    row = db.execute("SELECT player_id FROM hand_declarers WHERE hand_id=?", (hid,)).fetchone()
+    original_declarer = row[0] if row else None
     key = str(get("bid_key") or hand["bid_key"])
     # A correction may keep the hand's bid even if the club has since disabled it.
     if key != hand["bid_key"] and key not in enabled_bid_keys(session_bid_settings(db, session)):
         raise ValueError("Meldingen er ikke slået til i klubben")
+    if key not in rules:
+        raise ValueError("Ukendt melding")
     bid = rules[key]
+    if not (get("declarer") or original_declarer):
+        raise ValueError("Vælg en melder")
     declarer = int(get("declarer") or original_declarer)
     if declarer not in participants:
         raise ValueError("Melder skal deltage i hånden")

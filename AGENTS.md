@@ -28,8 +28,18 @@
 - Tests set up admin/`a$$word` in a temporary home before the app imports; preserve that import order in `tests/conftest.py`.
 - Danish user-facing text is intentional; preserve it unless the task explicitly changes wording.
 - Compact style (one-line `if`, semicolons) is intentional. Ruff ignores `E701`, `E702`, and `E402`; do not mass-reformat unrelated code.
-- No CI is configured; local tests and ruff are the verification path.
+- CI (`.github/workflows/ci.yml`) runs the tests on Python 3.11 and 3.13 and ruff on every push and pull request. Run them locally too before committing.
 - Production deployment is Docker Compose + Cloudflare Tunnel: UID/GID `10001`, read-only config, writable data. See `DEPLOY.md` before changing runtime paths or startup behavior.
+
+## Before merging a branch
+Review the branch against `main` locally with `/code-review` (there is no PR bot). Besides correctness, check what is easy to get wrong here:
+- Scores, totals and money stay `Fraction` (stored as numerator/denominator), never float: ties and zero sums decide settlements. Floats are fine only for display, such as percentages and averages in statistics.
+- Every query on club data is scoped by `active_club_id()`; new night or member URLs are covered by the middleware's club check.
+- New routes are checked against the path rules in `main.py` and `member_operation_allowed`/`member_read_allowed` in `web.py`; auth and same-origin checks are not weakened.
+- Schema changes are additive in `init_db()`, safe to run twice, and keep existing ids and rows.
+- A night's rules come from its rule version (`night_rules`), never from today's `club_settings`; only display text such as member names and short bid names is read live.
+- Writes that must agree with what the user saw use `BEGIN IMMEDIATE` and the night state token.
+- Danish user-facing text is preserved, the repo stays LF, and changed behavior has a regression test.
 
 
 ## Import workflows and behavioral contracts

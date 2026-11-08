@@ -8,13 +8,12 @@ settlement under the night's rule version, all or nothing. A form built before a
 device changed the night is refused.
 """
 
-from fractions import Fraction
-
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from ..database import connect
 from ..rule_versions import is_club_night, night_rules
+from ..rules import load_rules
 from ..web import can_manage_club, get_session, night_state_token, render, view_data
 from .sessions import hand_result, settle_night, write_hand
 
@@ -37,23 +36,45 @@ def _log(db, request, sid, text):
                (sid, request.session.get("user", "admin"), text))
 
 
-def _stored(db, hand):
+def _number(value):
+    """A submitted select's value as an int; empty or invalid is None (the hand's checks reject it)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _inputs_changed(db, hand, bids, get, getlist):
+    """Whether the form changes what was played in a hand, compared field by field.
+
+    Only a hand with changed inputs is scored again. Its stored scores are never compared
+    with a fresh calculation: an imported hand's scores come from the sheet, and older
+    hands may have been scored under other values, so recalculating untouched hands would
+    silently rewrite history.
+    """
     hid = hand["id"]
-    return dict(
-        key=hand["bid_key"], target=hand["target"], actual=hand["actual"], partner=hand["partner_id"],
-        declarer=db.execute("SELECT player_id FROM hand_declarers WHERE hand_id=?", (hid,)).fetchone()[0],
-        specials=sorted(tuple(r) for r in db.execute(
-            "SELECT player_id,actual,won FROM special_bids WHERE hand_id=?", (hid,))),
-        scores={r[0]: Fraction(r[1], r[2]) for r in db.execute(
-            "SELECT player_id,numerator,denominator FROM hand_scores WHERE hand_id=?", (hid,))},
-    )
-
-
-def _changed(stored, r):
-    return (stored["key"], stored["target"], stored["actual"], stored["partner"], stored["declarer"],
-            stored["specials"], stored["scores"]) != (
-        r["key"], r["target"], r["actual"], r["partner"], r["declarer"], sorted(r["specials"]),
-        {pid: Fraction(str(v)) for pid, v in r["scores"].items()})
+    row = db.execute("SELECT player_id FROM hand_declarers WHERE hand_id=?", (hid,)).fetchone()
+    declarer = row[0] if row else None
+    key = str(get("bid_key"))
+    if key != hand["bid_key"] or _number(get("declarer")) != declarer:
+        return True
+    kind = bids[key]["target"] if key in bids else None
+    if kind == "variable":
+        partner = hand["partner_id"] if hand["partner_id"] is not None else declarer
+        return (_number(get("target")), _number(get("partner")), _number(get("actual"))) != (
+            hand["target"], partner, hand["actual"] if hand["actual"] is not None else 0)
+    if kind is None:
+        return False  # a bid this app does not know, from an import: it can only be deleted
+    stored = {r[0]: r[1] for r in db.execute("SELECT player_id,actual FROM special_bids WHERE hand_id=?", (hid,))}
+    if kind == "fixed":
+        going = {_number(v) for v in getlist("going")} | {declarer}
+        if going != set(stored) | {declarer}:
+            return True
+        bidders = going
+    else:
+        bidders = {r[0] for r in db.execute("SELECT player_id FROM hand_participants WHERE hand_id=?", (hid,))}
+    return any(_number(get(f"actual_{pid}")) != (stored.get(pid) if stored.get(pid) is not None else 0)
+               for pid in bidders)
 
 
 def apply_edit(db, session, form):
@@ -64,6 +85,7 @@ def apply_edit(db, session, form):
     sid = session["id"]
     changes, errors = [], []
     hands = db.execute("SELECT * FROM hands WHERE session_id=? ORDER BY id", (sid,)).fetchall()
+    bids = load_rules(night_rules(db, sid)["bid_settings"])["bids"]
     for number, hand in enumerate(hands, 1):
         hid = hand["id"]
         if form.get(f"h{hid}_delete"):
@@ -78,14 +100,15 @@ def apply_edit(db, session, form):
 
         def getlist(name, hid=hid):
             return form.getlist(f"h{hid}_{name}")
+        if not _inputs_changed(db, hand, bids, get, getlist):
+            continue
         try:
             result = hand_result(db, session, hand, get, getlist)
         except EDIT_ERRORS as exc:
             errors.append(f"Hånd {number}: {exc}")
             continue
-        if _changed(_stored(db, hand), result):
-            write_hand(db, hid, result)
-            changes.append(f"rettede hånd {number}")
+        write_hand(db, hid, result)
+        changes.append(f"rettede hånd {number}")
     if len(hands) and all(form.get(f"h{h['id']}_delete") for h in hands):
         errors.append("En afsluttet spilaften skal have mindst én hånd.")
 

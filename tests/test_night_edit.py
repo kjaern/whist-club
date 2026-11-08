@@ -58,7 +58,7 @@ def night(client):
 
 def _hands(sid):
     with connect() as db:
-        return [dict(h, declarer=db.execute("SELECT player_id FROM hand_declarers WHERE hand_id=?", (h["id"],)).fetchone()[0])
+        return [dict(h, declarer=(db.execute("SELECT player_id FROM hand_declarers WHERE hand_id=?", (h["id"],)).fetchone() or [None])[0])
                 for h in db.execute("SELECT * FROM hands WHERE session_id=? ORDER BY id", (sid,))]
 
 
@@ -210,3 +210,58 @@ def test_closing_refuses_a_stale_page_and_a_second_close(client, night):
         assert db.execute("SELECT ended_at FROM sessions WHERE id=?", (sid,)).fetchone()[0] is None
     client.post(f"/sessions/{sid}/end", data={"collect_club_money": "true"})
     assert client.post(f"/sessions/{sid}/end", data={"collect_club_money": "true"}).status_code == 409
+
+
+def _scores(hid):
+    with connect() as db:
+        return sorted(tuple(r) for r in db.execute(
+            "SELECT player_id,numerator,denominator FROM hand_scores WHERE hand_id=?", (hid,)))
+
+
+def test_untouched_hands_keep_their_recorded_scores(client, night):
+    """A hand's stored scores may not match a fresh calculation (sheet values, older rules);
+    saving another change must not rescore it."""
+    sid, _, players = night
+    first, second = (h["id"] for h in _hands(sid))
+    with connect() as db:  # as an import would record them, not as the rules would score them
+        db.execute("UPDATE hand_scores SET numerator=numerator*3 WHERE hand_id=?", (first,))
+    recorded = _scores(first)
+    form = _form(client, sid, **{f"h{second}_actual": 9, f"add_penalty_{players[2]}": "1"})
+    preview = client.post(f"/sessions/{sid}/edit/calculate", data=form).text
+    assert "Rettede hånd 2" in preview and "hånd 1" not in preview
+    client.put(f"/sessions/{sid}", data=form)
+    assert _scores(first) == recorded
+    assert _log(sid)[-1].startswith("Redigeret: rettede hånd 2, tilføjede 1 × Fejl40")
+
+
+def test_an_imported_hand_with_an_unknown_bid_and_no_declarer(client, night):
+    """The importer stores unrecognised bids as historical_unknown, sometimes without a declarer.
+    Such a night can still be edited; the hand itself can only be kept or deleted."""
+    sid, _, players = night
+    first, second = (h["id"] for h in _hands(sid))
+    with connect() as db:
+        db.execute("UPDATE hands SET bid_key='historical_unknown',bid_label='Ukendt',actual=NULL,"
+                   "partner_id=NULL WHERE id=?", (second,))
+        db.execute("DELETE FROM hand_declarers WHERE hand_id=?", (second,))
+    recorded = _scores(second)
+    page = client.get(f"/sessions/{sid}/edit").text
+    assert "Hånden kan kun slettes" in page and f'name="h{second}_bid_key"' not in page
+    state = re.search(r'name="night_state" value="([0-9a-f]+)"', page).group(1)
+    hand1 = {k: v for k, v in _form(client, sid).items() if k.startswith(f"h{first}_")}
+    saved = client.put(f"/sessions/{sid}", data={"night_state": state, **hand1, f"add_penalty_{players[0]}": "1"})
+    assert saved.headers.get("HX-Redirect") == f"/sessions/{sid}"
+    assert _scores(second) == recorded
+    # A known hand without a declarer asks for one rather than failing.
+    with connect() as db:
+        db.execute("DELETE FROM hand_declarers WHERE hand_id=?", (first,))
+    page = client.get(f"/sessions/{sid}/edit").text
+    assert "Ingen melder registreret" in page
+    state = re.search(r'name="night_state" value="([0-9a-f]+)"', page).group(1)
+    with connect() as db:  # keep the Fejl40 saved above
+        kept = [str(r[0]) for r in db.execute("SELECT id FROM penalty_payments WHERE session_id=?", (sid,))]
+    unchanged = {**hand1, f"h{first}_declarer": "", "keep_penalty": kept}
+    assert "Der er ingen ændringer." in client.put(f"/sessions/{sid}", data={"night_state": state, **unchanged}).text
+    changed = {**unchanged, f"h{first}_actual": "9"}
+    assert "Hånd 1: Vælg en melder" in client.put(f"/sessions/{sid}", data={"night_state": state, **changed}).text
+    client.put(f"/sessions/{sid}", data={"night_state": state, **unchanged, f"h{second}_delete": "1"})
+    assert [h["id"] for h in _hands(sid)] == [first]

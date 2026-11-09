@@ -3,7 +3,7 @@
 from collections import defaultdict
 
 from .base import PARTNERLESS, Cell, Column, Statistic, Table, pct_text, ratio
-from .seating import offset, table_order
+from .seating import SEAT_NOTE, offset, table_order
 
 SEATS = ((1, "left", "Makker til venstre", "Makkeren sad til venstre for melderen og spillede lige efter."),
          (2, "opposite", "Makker overfor", "Makkeren sad overfor melderen."),
@@ -22,8 +22,8 @@ class PartnerSeat(Statistic):
     title = "Makkerens plads"
     topic = "bordet"
     description = ("Sejrsprocent for meldinger med makker, efter hvor makkeren sad i forhold til melderen. "
-                   "Kun hænder med fire ved bordet. Tallet i parentes er afgjorte hænder. "
-                   "Kun aftenens sidste bordplan kendes, og importerede aftener bruger rækkefølgen fra arket.")
+                   "Pladserne regnes blandt de fire, der spiller hånden; den, der sidder over, tæller ikke med. "
+                   "Tallet i parentes er afgjorte hænder. " + SEAT_NOTE)
 
     def compute(self, data):
         tally = defaultdict(lambda: defaultdict(lambda: [0, 0]))  # member (None = club) -> seat -> [won, lost]

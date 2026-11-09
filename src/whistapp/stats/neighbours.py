@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 from fractions import Fraction
 
 from .base import Cell, Column, Statistic, Table, pct_text, points_text
-from .seating import table_order
+from .seating import SEAT_NOTE, table_order
 
 MIN_TOGETHER = 20  # hands side by side before a neighbour can be lucky or unlucky
 MIN_TOGETHER_NIGHT = 5
@@ -23,9 +23,10 @@ class Neighbours(Statistic):
     key = "naboer"
     title = "Naboer"
     topic = "bordet"
-    description = ("Hvem sad lige før og lige efter hvert klubmedlem ved bordet i de hænder, medlemmet spillede, "
-                   "og hvordan det gik ved siden af hvem. Den, der sidder til venstre, spiller lige efter dig. "
-                   "Kun aftenens sidste bordplan kendes, og importerede aftener bruger rækkefølgen fra arket.")
+    description = ("Hvem der spillede lige før og lige efter hvert klubmedlem i de hænder, medlemmet spillede, "
+                   "og hvordan det gik ved siden af hvem. Den, der sidder til venstre for dig, spiller lige efter dig. "
+                   "Den, der sidder over i en hånd, springes over: sidder din sidemand over, er det den næste ved "
+                   "bordet, der spiller lige før eller efter dig i den hånd. " + SEAT_NOTE)
 
     def compute(self, data):
         minimum = MIN_TOGETHER_NIGHT if data.scope.kind == "night" else MIN_TOGETHER

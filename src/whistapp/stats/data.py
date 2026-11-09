@@ -180,7 +180,7 @@ def load(db, scope, roster=None):
             rows[r["hand_id"]].append(r)
         return rows
 
-    # Only a night's last seating is stored; imported nights use the sheet's column order.
+    # One seat order per night (players join or leave, never swap); imported nights use the sheet's column order.
     seats = defaultdict(list)
     for r in db.execute(
         f"""SELECT p.id,p.session_id FROM players p JOIN sessions s ON s.id=p.session_id

@@ -11,7 +11,7 @@ from fractions import Fraction
 
 from .base import PARTNERLESS, SPECIAL, pct_text, points_text
 from .projection import classical_mds, pca, standardize
-from .seating import table_order
+from .seating import SEAT_NOTE, table_order
 
 MIN_HANDS = 30  # hands a member must have played to get a point on a map
 MIN_HANDS_NIGHT = 5
@@ -163,9 +163,9 @@ def seating_map(data):
     base = dict(key="bordkort", title="Bordkort",
                 description=("Medlemmerne placeret, så dem, der ofte sad tæt ved bordet, ligger tæt (MDS). Afstanden "
                              "mellem to er, hvor mange pladser der var imellem dem i snit over deres fælles hænder, "
-                             "regnet den korte vej rundt, hvor 1 er lige overfor. Stregerne viser de par, der oftest "
-                             "sad lige ved siden af hinanden. Kun aftenens sidste bordplan "
-                             "kendes, og importerede aftener bruger rækkefølgen fra arket. Kun medlemmer med mindst "
+                             "regnet den korte vej rundt, hvor 1 er lige overfor. Pladserne tælles blandt dem, der "
+                             "spiller hånden, så den, der sidder over, springes over. Stregerne viser de par, der "
+                             "oftest spillede lige ved siden af hinanden. " + SEAT_NOTE + " Kun medlemmer med mindst "
                              f"{_minimum(data)} hænder er med."))
     hands = Counter()
     together = Counter()

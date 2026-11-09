@@ -3,7 +3,7 @@
 from collections import defaultdict
 
 from .base import Cell, Column, Statistic, Table
-from .seating import GUEST, danish_date
+from .seating import GUEST, SEAT_NOTE, danish_date
 
 
 def arrangement(data, night, played):
@@ -25,9 +25,8 @@ class Seatings(Statistic):
     title = "Faste pladser"
     topic = "bordet"
     scopes = ("all", "year", "period")
-    description = ("Hvordan bordet sad, rundt om bordet mod venstre, og hvor ofte. Det er det samme bord, "
-                   "uanset hvem der sad 'først'. Kun aftenens sidste bordplan kendes, og importerede aftener "
-                   "bruger rækkefølgen fra arket.")
+    description = ("Hvordan bordet sad, rundt om bordet mod venstre, og hvor ofte, med alle der spillede mindst "
+                   "én hånd den aften. Det er det samme bord, uanset hvem der sad 'først'. " + SEAT_NOTE)
 
     def compute(self, data):
         stats = defaultdict(lambda: dict(nights=0, last=None, streak=0))

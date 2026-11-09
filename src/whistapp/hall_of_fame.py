@@ -495,12 +495,21 @@ def night_streak(data, results, award, hit):
 
 
 def hand_streak(data, award, sign):
-    return streaks(data, award, member_hands(data), lambda item: item[1] * sign > 0,
+    """Hand runs within one evening: a None between two evenings' hands ends the run."""
+    played = {}
+    for mid, hands in member_hands(data).items():
+        items = []
+        for item in hands:
+            if items and items[-1][0].session_id != item[0].session_id:
+                items.append(None)
+            items.append(item)
+        played[mid] = items
+    return streaks(data, award, played, lambda item: item is not None and item[1] * sign > 0,
                    lambda item: data.nights[item[0].session_id], "hænder", lambda item: item[1])
 
 
-HAND_STREAK_RULE = ("på tværs af aftener i datoorden. En hånd uden ændring bryder rækken; en hånd man sidder over "
-                    "gør ikke. Samme regel som Vinder- og taberrækker under Rekorder.")
+HAND_STREAK_RULE = ("inden for én aften; rækken slutter, når aftenen gør. En hånd uden ændring bryder rækken; "
+                    "en hånd man sidder over gør ikke.")
 
 
 def win_streak(data, results):

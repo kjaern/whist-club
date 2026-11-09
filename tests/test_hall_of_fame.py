@@ -381,18 +381,19 @@ def test_lose_streak_is_shared_on_equal_length(db):
     assert [h.detail for h in streak.holders] == ["fra 2026-01-01 til 2026-01-02", "fra 2026-01-03 til 2026-01-04"]
 
 
-def test_hand_streaks_cross_nights_skip_sat_out_hands_and_break_on_zero(db):
+def test_hand_streaks_end_with_the_night_skip_sat_out_hands_and_break_on_zero(db):
     night(db, 1, "2026-01-01", [dict(scores={1: 3, 2: -1, 3: -1, 4: -1}),
                                 dict(scores={1: 2, 2: -2, 3: 1, 4: -1}),
                                 dict(scores={2: 4, 3: -2, 4: -2})])  # Anna sits out: no break
-    night(db, 2, "2026-01-02", [dict(scores={1: 5, 2: -5, 3: 0, 4: 0}),  # Dorte's zero breaks her run
+    night(db, 2, "2026-01-02", [dict(scores={1: 5, 2: -5, 3: 0, 4: 0}),  # a new night: Anna starts over
                                 dict(scores={1: 0, 2: 0, 3: 1, 4: -1}),  # Anna's zero breaks hers
                                 dict(scores={1: 1, 2: -1, 3: 1, 4: -1})])
     result = hof(db)
     wins, losses = result.award("sejrsraekke_haender"), result.award("taberraekke_haender")
-    assert holders(wins) == [("Anna", 3)]
-    assert wins.holders[0].value_text == "3 hænder i træk"
-    assert wins.holders[0].detail == "fra 2026-01-01 til 2026-01-02 · +10 point"
+    # Anna won the last two hands of night 1 she played and the first of night 2: two, not three.
+    assert holders(wins) == [("Anna", 2), ("Carl", 2)]
+    assert wins.holders[0].value_text == "2 hænder i træk"
+    assert [h.detail for h in wins.holders] == ["aftenen 2026-01-01 · +5 point", "aftenen 2026-01-02 · +2 point"]
     assert holders(losses) == [("Dorte", 3)]
     assert losses.holders[0].detail == "aftenen 2026-01-01 · -4 point"
     records = dict(result.records)

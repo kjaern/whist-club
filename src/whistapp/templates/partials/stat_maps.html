@@ -1,0 +1,75 @@
+{% set me = linked_member(request) %}
+{% for m in topic_data %}
+  <section class="card stat-map-card">
+    <div class="stats-section-heading">
+      <h2>{{ m.title }}</h2>
+      {% if m.points %}
+        <div class="stat-map-views" role="group" aria-label="Visning">
+          {% for view, label in [('3d', '3D'), ('xy', 'XY' if m.fields else '1–2'), ('xz', 'XZ' if m.fields else '1–3'), ('yz', 'YZ' if m.fields else '2–3')] %}
+            <button type="button" class="secondary stat-map-view" data-view="{{ view }}" aria-pressed="{{ 'true' if view == '3d' else 'false' }}"{% if not m.fields %} aria-label="Akse {{ label }}"{% endif %}>{{ label }}</button>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    <p class="muted">{{ m.description }}</p>
+    {% if m.points %}
+      {% if m.fields %}
+        <div class="stat-map-controls">
+          {% if m.groups %}
+            <label>Spiller
+              <select class="stat-map-group">
+                {% for g in m.groups %}<option value="{{ g.id }}" {{ 'selected' if me and me.id == g.id else '' }}>{{ g.name }}</option>{% endfor %}
+              </select>
+            </label>
+          {% endif %}
+          {% for axis in ('x', 'y', 'z') %}
+            {% set default = m.defaults[loop.index0] %}
+            <label>{{ axis|upper }}-akse
+              <select class="stat-map-pick" data-axis="{{ axis }}">
+                {% for f in m.fields %}<option value="{{ f.key }}" {{ 'selected' if f.key == default else '' }}>{{ f.label }}</option>{% endfor %}
+              </select>
+            </label>
+          {% endfor %}
+        </div>
+      {% endif %}
+      <div class="stat-map graph-chart">
+        <script type="application/json">{{ m|tojson }}</script>
+      </div>
+      <p class="muted stat-map-hint">Tryk eller hold musen over et punkt for at se tallene. I 3D kan du trække i kortet for at dreje det; de andre knapper viser kortet fladt fra hver side.<span class="stat-map-missing"></span></p>
+      {% if m.axes %}
+        <ul class="stat-map-axes">
+          {% for a in m.axes %}
+            <li><strong>Akse {{ loop.index }}</strong>: {{ a.share }} af forskellene{% if a.drivers %} · {{ a.drivers }}{% endif %}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if m.fields %}
+        <details class="graph-table">
+          <summary>Om tallene</summary>
+          <ul class="muted stat-map-about">
+            {% for f in m.fields %}<li><strong>{{ f.label }}</strong>: {{ f.about }}</li>{% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+      {% if m.table %}
+        <details class="graph-table">
+          <summary>Vis tal</summary>
+          <div class="stat-scroll">
+            <table class="night stat-table">
+              <thead><tr>{% for c in m.table.columns %}<th scope="col">{{ c }}</th>{% endfor %}</tr></thead>
+              <tbody>
+                {% for row in m.table.rows %}<tr>{% for v in row %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <ul class="muted stat-map-about">
+            {% for c in m.table.columns[2:] %}<li><strong>{{ c }}</strong>: {{ m.table.about[loop.index0] }}</li>{% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    {% else %}
+      <p>{{ m.empty }}</p>
+    {% endif %}
+  </section>
+{% endfor %}
+<script src="{{ static_url('stat-maps.js') }}"></script>

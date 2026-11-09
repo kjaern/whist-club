@@ -511,6 +511,22 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .graph-chip { background: #10212a; border: 1px solid #344650; color: #eaf0f4; font-weight: 500; font-size: .85rem; padding: 5px 9px; }
 .graph-chip[aria-pressed="false"] { color: #aabcc5; opacity: .7; }
 .graph-table summary { color: #aabcc5; font-size: .9rem; }
+/* Kort: members as points (stat-maps.js). */
+.stat-map { max-width: 720px; }
+/* Pan-y keeps the page scrollable on a phone: a sideways drag turns the map. */
+.stat-map.stat-map-turning svg { touch-action: pan-y; cursor: grab; }
+.stat-map-views { display: flex; gap: 4px; }
+.stat-map-view { padding: 4px 10px; font-size: .85rem; }
+.stat-map-view[aria-pressed="true"] { background: #eaf0f4; color: #10212a; }
+.stat-map-edge { stroke: #aabcc5; stroke-linecap: round; }
+.stat-map-label { fill: #eaf0f4; font-size: 13px; pointer-events: none; }
+.stat-map-point { cursor: pointer; outline: none; }
+.stat-map-point:focus-visible circle { stroke: #eaf0f4; }
+.stat-map-axes, .stat-map-about { margin: 8px 0; padding-left: 18px; }
+.stat-map-hint { font-size: .85rem; }
+.stat-map-controls { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 8px 0; }
+.stat-map-controls label { display: flex; align-items: center; gap: 6px; font-size: .9rem; }
+.stat-map-axis-name { fill: #eaf0f4; font-size: 12px; font-weight: 600; }
 /* Rules pages: placements and bids. */
 .rule-table{border-collapse:collapse}
 .rule-table th,.rule-table td{text-align:left;padding:.25rem .9rem .25rem 0;vertical-align:top}

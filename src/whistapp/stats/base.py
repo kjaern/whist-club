@@ -35,6 +35,7 @@ class Column:
     label: str
     description: str = ""
     fmt: str = "int"  # int | points | pct | signed | text
+    graph: bool = True  # False when the number it sorts by means nothing followed through periods
 
 
 @dataclass

@@ -4,17 +4,22 @@ To add a statistic: write a Statistic subclass in its own file and list it here.
 """
 
 from .. import hall_of_fame
+from . import maps
 from .base import Topic
 from .bids_by_member import BidsByMember
 from .bids_played import BidsPlayed
 from .club_rhythm import ClubRhythm
+from .dealer_seat import DealerSeat
 from .extremes import Extremes
 from .streaks import Streaks
 from .member_specials import MemberSpecials
+from .neighbours import Neighbours
 from .night_grid import NightGrid
 from .overview import Overview
 from .partner_pairs import PartnerPairs
+from .partner_seat import PartnerSeat
 from .placements import Placements
+from .seatings import Seatings
 from .self_partner import SelfPartner
 from .special_multi import SpecialMulti
 
@@ -22,8 +27,12 @@ TOPICS = [
     Topic("overblik", "Overblik", [Overview()]),
     Topic("meldinger", "Meldinger", [BidsPlayed(), BidsByMember(), SpecialMulti()]),
     Topic("makkerpar", "Makkerpar", [PartnerPairs(), SelfPartner(), MemberSpecials()]),
+    Topic("bordet", "Bordet", [Neighbours(), PartnerSeat(), Seatings()]),
+    # Members as points on a map (PCA and MDS), computed by maps.py and drawn by stat-maps.js.
+    Topic("kort", "Kort", scopes=("all", "year", "period", "night"),
+          page="partials/stat_maps.html", build=maps.compute),
     Topic("rekorder", "Rekorder", [Streaks(), Extremes(), ClubRhythm()]),
-    Topic("placeringer", "Placeringer", [Placements(), NightGrid()]),
+    Topic("placeringer", "Placeringer", [Placements(), NightGrid(), DealerSeat()]),
     # Club titles and records, computed by hall_of_fame.py rather than as tables.
     Topic("hall-of-fame", "🏆 Hall of Fame", scopes=("all", "year", "period"),
           page="partials/hall_of_fame.html", build=hall_of_fame.compute),

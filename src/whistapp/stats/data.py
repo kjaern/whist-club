@@ -63,6 +63,7 @@ class HandRecord:
     participants: frozenset
     scores: dict  # player id -> Fraction, guests included
     specials: list  # (player id, actual, won) per special bidder
+    dealer: int | None = None  # player id; recorded on live hands since 7 Nov 2026
 
 
 @dataclass
@@ -90,6 +91,7 @@ class StatsData:
     names: dict  # str(member id) -> current display name
     bids: list = field(default_factory=list)  # (key, label) of every bid the club plays, in its order
     bid_order: list = field(default_factory=list)  # every bid key in the scope's order
+    seats: dict = field(default_factory=dict)  # night id -> player ids in seat order, guests included
 
     def bid_rank(self, key):
         """A bid's place in the club's order (the night's own for a night); unknown ones last."""
@@ -178,6 +180,15 @@ def load(db, scope, roster=None):
             rows[r["hand_id"]].append(r)
         return rows
 
+    # Only a night's last seating is stored; imported nights use the sheet's column order.
+    seats = defaultdict(list)
+    for r in db.execute(
+        f"""SELECT p.id,p.session_id FROM players p JOIN sessions s ON s.id=p.session_id
+        WHERE {where} ORDER BY p.session_id, COALESCE(p.seat_order,p.id), p.id""",
+        args,
+    ):
+        seats[r["session_id"]].append(r["id"])
+
     participants = per_hand("hand_participants")
     scores = per_hand("hand_scores")
     specials = per_hand("special_bids")
@@ -196,6 +207,7 @@ def load(db, scope, roster=None):
             participants=frozenset(x["player_id"] for x in participants[r["id"]]),
             scores={x["player_id"]: Fraction(x["numerator"], x["denominator"]) for x in scores[r["id"]]},
             specials=[(x["player_id"], x["actual"], x["won"]) for x in specials[r["id"]]],
+            dealer=r["dealer_id"],
         ))
 
     for r in db.execute(
@@ -235,7 +247,7 @@ def load(db, scope, roster=None):
         night.member_names[r["member_id"]] = r["name"]
 
     return StatsData(scope=scope, hands=hands, nights=nights, players=players,
-                     names={str(k): v for k, v in roster}, **_bid_catalogue(db, scope, hands))
+                     names={str(k): v for k, v in roster}, seats=dict(seats), **_bid_catalogue(db, scope, hands))
 
 
 def _bid_catalogue(db, scope, hands):

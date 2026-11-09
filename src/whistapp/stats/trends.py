@@ -78,6 +78,8 @@ def trend(stat, table, data, sub_periods=None):
 
     columns = {}
     for c in table.columns[1:]:
+        if not c.graph:
+            continue
         values = {name: [None] * len(tables) for name in names}
         graphable, seen = True, False
         for i, t in enumerate(tables):

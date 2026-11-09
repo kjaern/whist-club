@@ -177,6 +177,7 @@ templates.env.globals["bid_rule_options"] = bid_rule_options
 
 
 templates.env.globals["can_manage_club"] = can_manage_club
+templates.env.globals["linked_member"] = linked_member
 
 
 templates.env.globals["ai_import_allowed"] = ai_import_allowed

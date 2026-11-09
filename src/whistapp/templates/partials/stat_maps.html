@@ -3,7 +3,7 @@
   <section class="card stat-map-card">
     <div class="stats-section-heading">
       <h2>{{ m.title }}</h2>
-      {% if m.points %}
+      {% if m.points or m.groups %}
         <div class="stat-map-views" role="group" aria-label="Visning">
           {% for view, label in [('3d', '3D'), ('xy', 'XY' if m.fields else '1–2'), ('xz', 'XZ' if m.fields else '1–3'), ('yz', 'YZ' if m.fields else '2–3')] %}
             <button type="button" class="secondary stat-map-view" data-view="{{ view }}" aria-pressed="{{ 'true' if view == '3d' else 'false' }}"{% if not m.fields %} aria-label="Akse {{ label }}"{% endif %}>{{ label }}</button>
@@ -12,7 +12,7 @@
       {% endif %}
     </div>
     <p class="muted">{{ m.description }}</p>
-    {% if m.points %}
+    {% if m.points or m.groups %}
       {% if m.fields %}
         <div class="stat-map-controls">
           {% if m.groups %}

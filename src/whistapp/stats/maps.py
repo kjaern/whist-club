@@ -300,13 +300,16 @@ def partner_map(data):
                 fields=[_field(k, label, fmt, about) for k, label, fmt, about in PARTNER_FIELDS],
                 defaults=["count", "pct", "points"])
     found = partners(data)
+    # Everyone who played can be picked, also with a single partner or none (fx one night of
+    # only Sol and selvmakker): the map then shows what there is and says so.
+    played = {data.member(pid) for h in data.hands for pid in h.participants} - {None}
     groups = [dict(id=me, name=data.name_of(me),
                    points=[dict(name=data.name_of(o), values=v)
-                           for o, v in sorted(others.items(), key=lambda item: data.name_of(item[0]).casefold())])
-              for me, others in found.items() if len(others) >= 2]
+                           for o, v in sorted(found.get(me, {}).items(), key=lambda item: data.name_of(item[0]).casefold())])
+              for me in played]
     groups.sort(key=lambda g: g["name"].casefold())
     if not groups:
-        return dict(base, groups=[], points=[], empty="Ingen spillere med mindst to forskellige makkere i perioden.")
+        return dict(base, groups=[], points=[], empty="Ingen klubmedlemmer har spillet en hånd i perioden.")
     return dict(base, groups=groups, points=groups[0]["points"])
 
 

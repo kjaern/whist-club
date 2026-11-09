@@ -111,7 +111,8 @@
       const points = shown.map(p => ({name: p.name, c: axes.map(a => scale(a, p.values[a.key])),
         detail: map.fields.map(f => `${f.label}: ${fmt(p.values[f.key], f.fmt)}`)}));
       const means = [0, 1, 2].map(i => points.reduce((s, p) => s + p.c[i], 0) / (points.length || 1));
-      return {points, edges: [], axes, means, left: source.length - shown.length};
+      const none = group && !source.length ? `${group.name} har ikke været melder og makker med et andet klubmedlem i perioden.` : '';
+      return {points, edges: [], axes, means, left: source.length - shown.length, none};
     }
 
     function drawFixedAxes(svg) {
@@ -172,7 +173,7 @@
       const svg = el('svg', {viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': map.title}, null);
       box.insertBefore(svg, tip);
       if (m.fixed) drawFixedAxes(svg); else drawPickedAxes(svg, m);
-      if (missing) missing.textContent = m.left ? ` ${m.left} vises ikke, fordi de mangler et af tallene.` : '';
+      if (missing) missing.textContent = m.none ? ` ${m.none}` : m.left ? ` ${m.left} vises ikke, fordi de mangler et af tallene.` : '';
       const pts = separate(m.points.map((p, i) => ({...p, i, ...project(p.c)})));
       for (const e of m.edges) {
         const a = pts[e.a], b = pts[e.b];

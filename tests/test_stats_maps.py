@@ -114,5 +114,6 @@ def test_partner_map_counts_both_roles_from_each_side(tmp_path, monkeypatch):
     assert found[2][1]['pct_bid'] == 0.0 and found[2][1]['pct_partner'] == 1.0
     assert found[1][3]['count'] == 1 and 4 not in found[1]
     partner = maps.partner_map(data)
-    # Only M1 had two different partners.
-    assert [(g['name'], [pt['name'] for pt in g['points']]) for g in partner['groups']] == [('M1', ['M2', 'M3'])]
+    # Everyone who played can be picked: M2 and M3 had one partner, M4 none.
+    assert [(g['name'], [pt['name'] for pt in g['points']]) for g in partner['groups']] == [
+        ('M1', ['M2', 'M3']), ('M2', ['M1']), ('M3', ['M1']), ('M4', [])]

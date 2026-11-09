@@ -520,6 +520,7 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .stat-map-view[aria-pressed="true"] { background: #eaf0f4; color: #10212a; }
 .stat-map-edge { stroke: #aabcc5; stroke-linecap: round; }
 .stat-map-label { fill: #eaf0f4; font-size: 13px; pointer-events: none; }
+.stat-map-leader { stroke: #aabcc5; stroke-width: 1; pointer-events: none; }
 .stat-map-point { cursor: pointer; outline: none; }
 .stat-map-point:focus-visible circle { stroke: #eaf0f4; }
 .stat-map-axes, .stat-map-about { margin: 8px 0; padding-left: 18px; }

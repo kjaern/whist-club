@@ -25,6 +25,41 @@
     return (Math.round(v * 100) / 100).toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
   }
 
+  // Points almost on top of each other (fx 62 hands at 85,5 % and 63 at 85,7 %) are pushed a
+  // few pixels apart on screen, so neither hides the other; their numbers are unchanged.
+  const GAP = 14;
+  function separate(pts) {
+    for (let pass = 0; pass < 20; pass++) {
+      let moved = false;
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i], b = pts[j];
+          let dx = b.sx - a.sx, dy = b.sy - a.sy, d = Math.hypot(dx, dy);
+          if (d >= GAP) continue;
+          if (d < 0.01) { dx = Math.cos(j * 2.4); dy = Math.sin(j * 2.4); d = 1; }  // the very same spot
+          const push = (GAP - d) / 2;
+          a.sx -= dx / d * push; a.sy -= dy / d * push;
+          b.sx += dx / d * push; b.sy += dy / d * push;
+          moved = true;
+        }
+      }
+      if (!moved) break;
+    }
+    return pts;
+  }
+
+  // Each name right of its dot, moved down (with a thin line to the dot) when another name is there.
+  function placeLabels(pts) {
+    const placed = [];
+    for (const p of [...pts].sort((a, b) => a.sy - b.sy)) {
+      const width = p.name.length * 7.5;
+      p.lx = p.sx + 12 * p.f;
+      p.ly = p.sy + 4;
+      while (placed.some(q => Math.abs(q.ly - p.ly) < 14 && p.lx < q.lx + q.width && q.lx < p.lx + width)) p.ly += 14;
+      placed.push({lx: p.lx, ly: p.ly, width});
+    }
+  }
+
   for (const box of document.querySelectorAll('.stat-map')) {
     const map = JSON.parse(box.querySelector('script').textContent);
     const card = box.closest('.stat-map-card');
@@ -138,16 +173,18 @@
       box.insertBefore(svg, tip);
       if (m.fixed) drawFixedAxes(svg); else drawPickedAxes(svg, m);
       if (missing) missing.textContent = m.left ? ` ${m.left} vises ikke, fordi de mangler et af tallene.` : '';
-      const pts = m.points.map((p, i) => ({...p, i, ...project(p.c)}));
+      const pts = separate(m.points.map((p, i) => ({...p, i, ...project(p.c)})));
       for (const e of m.edges) {
         const a = pts[e.a], b = pts[e.b];
         el('line', {x1: a.sx, y1: a.sy, x2: b.sx, y2: b.sy, class: 'stat-map-edge', 'stroke-opacity': (0.15 + 0.75 * e.w).toFixed(2),
           'stroke-width': (1 + 4 * e.w).toFixed(1)}, svg);
       }
+      placeLabels(pts);
       for (const p of [...pts].sort((a, b) => a.depth - b.depth)) {
         const g = el('g', {class: 'stat-map-point', tabindex: 0}, svg);
         el('circle', {cx: p.sx, cy: p.sy, r: (9 * p.f).toFixed(1), fill: SLOTS[p.i % SLOTS.length], class: 'graph-dot'}, g);
-        el('text', {x: p.sx + 12 * p.f, y: p.sy + 4, class: 'stat-map-label'}, g).textContent = p.name;
+        if (p.ly !== p.sy + 4) el('line', {x1: p.sx + 6 * p.f, y1: p.sy, x2: p.lx - 2, y2: p.ly - 4, class: 'stat-map-leader'}, g);
+        el('text', {x: p.lx, y: p.ly, class: 'stat-map-label'}, g).textContent = p.name;
         const show = () => {
           tip.textContent = '';
           const head = document.createElement('strong'); head.textContent = p.name; tip.appendChild(head);

@@ -460,52 +460,88 @@ def most_wins(data, results):
     return award
 
 
-def streaks(data, results, award, hit):
-    """Fill the award with the longest runs of nights where hit(night, member) holds.
+def streaks(data, award, sequences, hit, night_of, unit, points_of=None):
+    """Fill the award with the longest run of items where hit(item) holds, one per member.
 
-    Over the nights the member played: an absence does not break the run, a night without a hit does.
+    sequences: member id -> their items in play order (nights or hands they played), so an
+    absence or a hand sat out does not break a run; an item without a hit does. A member's
+    run is their first longest one. points_of(item), if given, adds the run's points.
     """
     rows = []
-    for mid, seen in appearances(data, results).items():
-        run = []
-        for r, _s in seen + [(None, None)]:
-            if r is not None and hit(r, mid):
-                run.append(r)
+    for mid, items in sequences.items():
+        best, run = [], []
+        for item in items + [None]:
+            if item is not None and hit(item):
+                run.append(item)
                 continue
-            if len(run) >= MIN_STREAK:
-                rows.append((mid, len(run), run[0], run[-1]))
+            if len(run) > len(best):
+                best = run
             run = []
-    for mid, n, first, last in sorted(leaders(rows, lambda r: r[1]),
-                                      key=lambda r: (r[2].night.date, data.name_of(r[0]).casefold())):
-        award.holders.append(Holder((mid,), data.name_of(mid), n, f"{n} i træk",
-                                    f"fra {first.night.date} til {last.night.date}",
-                                    night_link(last.night), night_label(last.night)))
+        if len(best) >= MIN_STREAK:
+            rows.append((mid, len(best), night_of(best[0]), night_of(best[-1]), best))
+    for mid, n, first, last, run in sorted(leaders(rows, lambda r: r[1]),
+                                           key=lambda r: (r[2].date, data.name_of(r[0]).casefold())):
+        detail = f"fra {first.date} til {last.date}" if first.id != last.id else f"aftenen {first.date}"
+        if points_of:
+            detail += f" · {signed(sum((points_of(i) for i in run), Fraction()))} point"
+        award.holders.append(Holder((mid,), data.name_of(mid), n, f"{n} {unit} i træk", detail,
+                                    night_link(last), night_label(last)))
     return award
 
 
+def night_streak(data, results, award, hit):
+    seen = {mid: [(r, mid) for r, _s in nights] for mid, nights in appearances(data, results).items()}
+    return streaks(data, award, seen, lambda item: hit(*item), lambda item: item[0].night, "aftener")
+
+
+def hand_streak(data, award, sign):
+    return streaks(data, award, member_hands(data), lambda item: item[1] * sign > 0,
+                   lambda item: data.nights[item[0].session_id], "hænder", lambda item: item[1])
+
+
+HAND_STREAK_RULE = ("på tværs af aftener i datoorden. En hånd uden ændring bryder rækken; en hånd man sidder over "
+                    "gør ikke. Samme regel som Vinder- og taberrækker under Rekorder.")
+
+
 def win_streak(data, results):
-    award = Award("sejrsraekke", "🔥", "Længste sejrsrække", "Når først man er i gang …",
+    award = Award("sejrsraekke", "🔥", "Længste sejrsrække (aftener)", "Når først man er i gang …",
                   "Flest sejre i træk (alene på 1.-pladsen) over de aftener, spilleren deltog i. Aftener man ikke "
                   "spillede bryder ikke rækken; en aften man ikke vandt (også en delt førsteplads) gør. "
                   f"Kræver mindst {MIN_STREAK} sejre i træk.",
                   "Ingen har endnu vundet to aftener i træk.")
-    return streaks(data, results, award, lambda r, mid: is_win(r.places[mid][0]))
+    return night_streak(data, results, award, lambda r, mid: is_win(r.places[mid][0]))
 
 
 def lose_streak(data, results):
-    award = Award("taberraekke", "🌧️", "Længste taberrække", "Når først det går skævt …",
+    award = Award("taberraekke", "🌧️", "Længste taberrække (aftener)", "Når først det går skævt …",
                   "Flest sidstepladser i træk (alene på sidstepladsen) over de aftener, spilleren deltog i. Aftener "
                   "man ikke spillede bryder ikke rækken; en aften man ikke blev sidst (også en delt sidsteplads) gør. "
                   f"Kræver mindst {MIN_STREAK} sidstepladser i træk.",
                   "Ingen har endnu været sidst to aftener i træk.")
-    return streaks(data, results, award, lambda r, mid: is_loss(r.places[mid][0], len(r.totals)))
+    return night_streak(data, results, award, lambda r, mid: is_loss(r.places[mid][0], len(r.totals)))
+
+
+def hand_win_streak(data):
+    award = Award("sejrsraekke_haender", "⚡", "Længste sejrsrække (hænder)", "Kortene vil bare det hele.",
+                  f"Flest hænder i træk med gevinst, {HAND_STREAK_RULE} Kræver mindst {MIN_STREAK} hænder i træk.",
+                  "Ingen har endnu vundet to hænder i træk.")
+    return hand_streak(data, award, 1)
+
+
+def hand_lose_streak(data):
+    award = Award("taberraekke_haender", "🧊", "Længste taberrække (hænder)", "Kan man blive ved med at tabe?",
+                  f"Flest hænder i træk med tab, {HAND_STREAK_RULE} Kræver mindst {MIN_STREAK} hænder i træk.",
+                  "Ingen har endnu tabt to hænder i træk.")
+    return hand_streak(data, award, -1)
 
 
 # Klubrekorder: (award key, what the record is), shown from the awards themselves.
 RECORDS = [
     ("sejre", "Flest førstepladser"),
-    ("sejrsraekke", "Længste sejrsrække"),
-    ("taberraekke", "Længste taberrække"),
+    ("sejrsraekke", "Længste sejrsrække (aftener)"),
+    ("sejrsraekke_haender", "Længste sejrsrække (hænder)"),
+    ("taberraekke", "Længste taberrække (aftener)"),
+    ("taberraekke_haender", "Længste taberrække (hænder)"),
     ("comeback", "Største comeback"),
     ("nedtur", "Største nedtur"),
     ("solkonge", "Flest vundne Sol og Ren sol"),
@@ -537,6 +573,8 @@ def compute(data):
         most_wins(data, results),
         win_streak(data, results),
         lose_streak(data, results),
+        hand_win_streak(data),
+        hand_lose_streak(data),
         form(data, results),
         nemesis(data, results),
         eternal_second(data, results),

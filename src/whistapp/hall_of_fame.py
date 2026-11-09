@@ -33,7 +33,7 @@ MIN_SECONDS = 3  # Evighedstoeren
 MIN_SOL_RATE_ATTEMPTS = 5  # Solkongen's success-rate line
 FORM_NIGHTS = 5  # Formbarometer
 YOYO_NIGHTS = 5  # Jojo-spilleren
-MIN_STREAK = 2  # Længste sejrsrække
+MIN_STREAK = 2  # Længste sejrsrække og taberrække
 
 # An ambitious bid: a trick contract for at least this many tricks, or a solo misère contract.
 AMBITIOUS_TRICKS = 10
@@ -170,6 +170,11 @@ def is_win(label):
 
 def has_first(label):
     return label.split("/")[0] == "1"
+
+
+def is_loss(label, members):
+    """Alone on last place of a night with this many members; a shared last place is not a loss."""
+    return label == str(members)
 
 
 def king(data, results, year, period=""):
@@ -455,17 +460,16 @@ def most_wins(data, results):
     return award
 
 
-def win_streak(data, results):
-    award = Award("sejrsraekke", "🔥", "Længste sejrsrække", "Når først man er i gang …",
-                  "Flest sejre i træk (alene på 1.-pladsen) over de aftener, spilleren deltog i. Aftener man ikke "
-                  "spillede bryder ikke rækken; en aften man ikke vandt (også en delt førsteplads) gør. "
-                  f"Kræver mindst {MIN_STREAK} sejre i træk.",
-                  "Ingen har endnu vundet to aftener i træk.")
+def streaks(data, results, award, hit):
+    """Fill the award with the longest runs of nights where hit(night, member) holds.
+
+    Over the nights the member played: an absence does not break the run, a night without a hit does.
+    """
     rows = []
     for mid, seen in appearances(data, results).items():
         run = []
         for r, _s in seen + [(None, None)]:
-            if r is not None and is_win(r.places[mid][0]):
+            if r is not None and hit(r, mid):
                 run.append(r)
                 continue
             if len(run) >= MIN_STREAK:
@@ -479,10 +483,29 @@ def win_streak(data, results):
     return award
 
 
+def win_streak(data, results):
+    award = Award("sejrsraekke", "🔥", "Længste sejrsrække", "Når først man er i gang …",
+                  "Flest sejre i træk (alene på 1.-pladsen) over de aftener, spilleren deltog i. Aftener man ikke "
+                  "spillede bryder ikke rækken; en aften man ikke vandt (også en delt førsteplads) gør. "
+                  f"Kræver mindst {MIN_STREAK} sejre i træk.",
+                  "Ingen har endnu vundet to aftener i træk.")
+    return streaks(data, results, award, lambda r, mid: is_win(r.places[mid][0]))
+
+
+def lose_streak(data, results):
+    award = Award("taberraekke", "🌧️", "Længste taberrække", "Når først det går skævt …",
+                  "Flest sidstepladser i træk (alene på sidstepladsen) over de aftener, spilleren deltog i. Aftener "
+                  "man ikke spillede bryder ikke rækken; en aften man ikke blev sidst (også en delt sidsteplads) gør. "
+                  f"Kræver mindst {MIN_STREAK} sidstepladser i træk.",
+                  "Ingen har endnu været sidst to aftener i træk.")
+    return streaks(data, results, award, lambda r, mid: is_loss(r.places[mid][0], len(r.totals)))
+
+
 # Klubrekorder: (award key, what the record is), shown from the awards themselves.
 RECORDS = [
     ("sejre", "Flest førstepladser"),
     ("sejrsraekke", "Længste sejrsrække"),
+    ("taberraekke", "Længste taberrække"),
     ("comeback", "Største comeback"),
     ("nedtur", "Største nedtur"),
     ("solkonge", "Flest vundne Sol og Ren sol"),
@@ -513,6 +536,7 @@ def compute(data):
         king(data, results, year, period),
         most_wins(data, results),
         win_streak(data, results),
+        lose_streak(data, results),
         form(data, results),
         nemesis(data, results),
         eternal_second(data, results),

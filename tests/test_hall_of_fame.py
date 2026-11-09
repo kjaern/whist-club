@@ -74,7 +74,7 @@ def test_empty_database_leaves_every_title_vacant(db):
     assert all(a.vacant for a in result.awards)
     assert all(a.explanation and a.empty for a in result.awards)
     assert [label for label, _a in result.records] == [
-        "Flest førstepladser", "Længste sejrsrække", "Største comeback", "Største nedtur",
+        "Flest førstepladser", "Længste sejrsrække", "Længste taberrække", "Største comeback", "Største nedtur",
         "Flest vundne Sol og Ren sol", "Flest vundne meldinger som makker"]
 
 
@@ -84,7 +84,7 @@ def test_one_night_gives_a_winner_but_no_king_or_nemesis(db):
     assert result.nights == 1
     assert holders(result.award("sejre")) == [("Bo", 1)]
     assert result.award("sejre").holders[0].detail == "1 af 1 aftener (100,0 %)"
-    for key in ("konge", "nemesis", "sejrsraekke", "form", "toer", "jojo", "vovehals", "forsigtige"):
+    for key in ("konge", "nemesis", "sejrsraekke", "taberraekke", "form", "toer", "jojo", "vovehals", "forsigtige"):
         assert result.award(key).vacant, key
 
 
@@ -338,6 +338,37 @@ def test_win_streak_counts_appearances_and_breaks_on_a_shared_first(db):
     assert holders(result.award("sejre")) == [("Anna", 4)]
     records = dict(result.records)
     assert records["Længste sejrsrække"] is streak
+
+
+def test_lose_streak_counts_appearances_and_breaks_on_a_shared_last(db):
+    night(db, 1, "2026-01-01", ranked(2, 3, 4, 1))
+    night(db, 2, "2026-01-02", ranked(2, 3, 1), members=(1, 2, 3))  # last of three is a loss too
+    night(db, 3, "2026-01-03", ranked(2, 3, 4, 5), members=(2, 3, 4, 5))  # Anna away: no break
+    night(db, 4, "2026-01-04", ranked(2, 3, 4, 1))
+    night(db, 5, "2026-01-05", [dict(scores={1: -5, 2: 5, 3: 5, 4: -5})])  # shared last breaks it
+    night(db, 6, "2026-01-06", ranked(2, 3, 4, 1))
+    night(db, 7, "2026-01-07", ranked(1, 2, 3, 4))
+    night(db, 8, "2026-01-08", ranked(1, 2, 3, 4))
+    result = hof(db)
+    streak = result.award("taberraekke")
+    assert holders(streak) == [("Anna", 3)]
+    assert streak.holders[0].detail == "fra 2026-01-01 til 2026-01-04"
+    assert streak.holders[0].value_text == "3 i træk"
+    # Dorte's two last places (nights 7 and 8) are a shorter streak; Bo's wins are unaffected.
+    assert holders(result.award("sejrsraekke")) == [("Bo", 4)]
+    assert dict(result.records)["Længste taberrække"] is streak
+    assert hof(db, 2025).award("taberraekke").vacant
+
+
+def test_lose_streak_is_shared_on_equal_length(db):
+    night(db, 1, "2026-01-01", ranked(1, 2, 4, 3))
+    night(db, 2, "2026-01-02", ranked(1, 2, 4, 3))
+    night(db, 3, "2026-01-03", ranked(1, 2, 3, 4))
+    night(db, 4, "2026-01-04", ranked(1, 2, 3, 4))
+    streak = hof(db).award("taberraekke")
+    assert streak.shared
+    assert holders(streak) == [("Carl", 2), ("Dorte", 2)]
+    assert [h.detail for h in streak.holders] == ["fra 2026-01-01 til 2026-01-02", "fra 2026-01-03 til 2026-01-04"]
 
 
 def test_members_who_left_keep_their_titles(db):

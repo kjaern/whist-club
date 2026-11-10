@@ -23,21 +23,29 @@
     <body>
 <header>
   <a href="/">♠ Whist</a>
-  <div class="header-actions">
-    {% set club = active_club(request) %}
-    {% if club %}<a href="/clubs">{{ club.name }}{% if club.choices > 1 %} · Skift klub{% endif %}</a>{% else %}<a href="/clubs">Vælg klub</a>{% endif %}
-    {% if club %}<a href="/statistics">Statistik</a>{% endif %}
-    {% if club %}<a href="/kasse">Klubkasse</a>{% endif %}
-    {% if ai_import_allowed() %}<a href="/import/current">Aktuelle importer</a>{% endif %}
-    {% if can_manage_club(request) %}<a href="/club">Klubadministration</a>{% endif %}
-    {% if request.session.get("user") == "admin" %}<a href="/admin/accounts">Serveradministration</a>{% endif %}
-    <a href="/account">Min konto</a>
-    <a href="/guide">Vejledning</a>
-    <button type="button" class="secondary" id="show-bid-rules" aria-haspopup="dialog">Vis regler</button>
-    <form method="post" action="/logout" class="logout-form">{{ csrf_field(request) }}
-      <button type="submit" class="secondary">Log ud</button>
-    </form>
-  </div>
+  {% set club = active_club(request) %}
+  <details class="nav-menu" id="nav-menu">
+    <summary aria-label="Menu"><span class="nav-menu-club">{% if club %}{{ club.name }}{% else %}Vælg klub{% endif %}</span><span class="nav-menu-icon" aria-hidden="true">☰</span></summary>
+    <nav class="nav-menu-panel">
+      {% if club %}<a href="/clubs">{{ club.name }}{% if club.choices > 1 %} · Skift klub{% endif %}</a>{% else %}<a href="/clubs">Vælg klub</a>{% endif %}
+      <hr>
+      {% if club %}<a href="/statistics">Statistik</a>{% endif %}
+      {% if club %}<a href="/kasse">Klubkasse</a>{% endif %}
+      {% if club %}<a href="/import">Importer spilaften</a>{% endif %}
+      {% if ai_import_allowed() %}<a href="/import/current">Aktuelle importer</a>{% endif %}
+      {% if club %}<a href="/rules">Regelhistorik</a>{% endif %}
+      <button type="button" id="show-bid-rules" aria-haspopup="dialog">Vis regler</button>
+      {% if can_manage_club(request) or request.session.get("user") == "admin" %}<hr>{% endif %}
+      {% if can_manage_club(request) %}<a href="/club">Klubadministration</a>{% endif %}
+      {% if request.session.get("user") == "admin" %}<a href="/admin/accounts">Serveradministration</a>{% endif %}
+      <hr>
+      <a href="/account">Min konto</a>
+      <a href="/guide">Vejledning</a>
+      <form method="post" action="/logout" class="logout-form">{{ csrf_field(request) }}
+        <button type="submit">Log ud</button>
+      </form>
+    </nav>
+  </details>
 </header>
 <main>
   {% block content %}
@@ -61,6 +69,13 @@
   </div>
   <p id="stat-info-description"></p>
 </dialog>
+<script>
+(() => {
+  const menu = document.getElementById('nav-menu');
+  document.addEventListener('click', event => { if (menu.open && !menu.contains(event.target)) menu.open = false; });
+  document.addEventListener('keydown', event => { if (event.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
+})();
+</script>
 <script>
 (() => {
   const statDialog = document.getElementById('stat-info-dialog');
@@ -97,6 +112,7 @@
     }
   }
   document.getElementById('show-bid-rules').addEventListener('click', () => {
+    document.getElementById('nav-menu').open = false;
     const current = document.querySelector('#new-hand-form [name=bid_key]');
     const selected = current ? rules.findIndex(rule => rule.key === current.value) : 0;
     dialog.showModal();

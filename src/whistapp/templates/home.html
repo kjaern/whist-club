@@ -3,9 +3,6 @@
   <h1>
     Spilaftener
   </h1>
-  <p>
-    <a href="/import">Importer spilaften →</a> · <a href="/rules">Regelhistorik →</a>{% if not member_view %} · <a href="/club">Klubadministration →</a>{% endif %}
-  </p>
   {% if kasse and kasse.error %}
     <p class="kasse-home"><a href="/kasse">Klubkasse →</a> Klubkassen kan ikke vises lige nu. Kontakt serveradministratoren.</p>
   {% elif kasse %}

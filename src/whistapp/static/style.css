@@ -574,3 +574,18 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .kasse-summary .muted{margin:.6rem 0 0}
 .kasserer-choice{display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap}
 .kasse-balance th{text-align:left;font-weight:600;padding-right:1.5rem}.kasse-balance td{text-align:right}
+
+/* Top banner: every page link lives in one hamburger menu. */
+header { position: relative; z-index: 20; flex-wrap: nowrap; }
+.nav-menu { position: relative; }
+.nav-menu > summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 8px 6px 12px; border-radius: 8px; background: #344650; color: #fff; font-weight: 700; font-size: .85rem; user-select: none; }
+.nav-menu > summary::-webkit-details-marker { display: none; }
+.nav-menu > summary:hover, .nav-menu[open] > summary { filter: brightness(1.12); }
+.nav-menu > summary:focus-visible { outline: 2px solid #4dc6a0; outline-offset: 2px; }
+.nav-menu-club { max-width: 40vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-menu-icon { font-size: 1.3rem; line-height: 1; }
+.nav-menu-panel { position: absolute; right: 0; top: calc(100% + 6px); min-width: 230px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; padding: 6px; background: #1f333d; border: 1px solid #49616b; border-radius: 10px; box-shadow: 0 10px 28px rgba(0,0,0,.45); }
+.nav-menu-panel a, .nav-menu-panel button, .nav-menu-panel .logout-form button { display: block; width: 100% !important; min-width: 0 !important; text-align: left; background: none; border: 0; color: #fff; font-size: .95rem; font-weight: 600; padding: 9px 12px !important; border-radius: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-menu-panel a:hover, .nav-menu-panel button:hover, .nav-menu-panel a:focus-visible, .nav-menu-panel button:focus-visible { background: #344650; outline: none; }
+.nav-menu-panel hr { border: 0; border-top: 1px solid #40545e; margin: 4px 6px; }
+.nav-menu-panel hr + hr, .nav-menu-panel hr:last-child { display: none; }

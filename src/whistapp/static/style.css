@@ -28,12 +28,12 @@ main{max-width:1080px;width:100%;padding:clamp(12px,2.5vw,28px)}
 /* v6: night creation occupies the available page width */
 .setup-card{max-width:none;width:100%;margin:16px 0}
 .setup-form{width:100%;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;column-gap:24px}
-.setup-form>label:first-child{grid-column:1/-1}
-.setup-form>label:nth-child(2){grid-column:1;grid-row:2 / span 2}
+.setup-form>label:first-of-type{grid-column:1/-1}
+.setup-form>label:nth-of-type(2){grid-column:1;grid-row:2 / span 2}
 .setup-form>fieldset{grid-column:2;grid-row:2}
 .setup-form>button{grid-column:2;grid-row:3;justify-self:start}
 .setup-form textarea{min-height:250px}
-@media(max-width:700px){.setup-form{grid-template-columns:minmax(0,1fr)}.setup-form>label:first-child,.setup-form>label:nth-child(2),.setup-form>fieldset,.setup-form>button{grid-column:1;grid-row:auto}.setup-form>button{width:100%}}
+@media(max-width:700px){.setup-form{grid-template-columns:minmax(0,1fr)}.setup-form>label:first-of-type,.setup-form>label:nth-of-type(2),.setup-form>fieldset,.setup-form>button{grid-column:1;grid-row:auto}.setup-form>button{width:100%}}
 
 /* v7: use the entire viewport; visible roster and immediately accessible results */
 main{max-width:none;width:100%;margin:0;padding:clamp(12px,1.8vw,30px)}

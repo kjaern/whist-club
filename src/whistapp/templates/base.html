@@ -23,6 +23,13 @@
     <body>
 <header>
   <a href="/">♠ Whist</a>
+  <div class="header-info">{% set bk = kasse_banner(request) %}{% if bk and bk.error %}
+    <p class="kasse-home"><a href="/kasse">Klubkasse →</a> Klubkassen kan ikke vises lige nu. Kontakt serveradministratoren.</p>
+  {% elif bk %}
+    <p class="kasse-home">
+      <a href="/kasse">Klubkasse →</a> Kassebeholdning {{ fmt(bk.cash) }} kr{% if bk.own is not none %} · Din saldo {{ fmt(bk.own) }} kr{% if bk.own < 0 %} (du skylder){% elif bk.own > 0 %} (til gode){% endif %}: bogført {{ fmt(bk.own_posted) }} kr, <span class="muted">afventer {{ fmt(bk.own_pending) }} kr</span>{% endif %}{% if bk.alerts %} · <strong>{{ bk.alerts }} ændrede spilaftener at se på</strong>{% endif %}
+    </p>
+  {% endif %}</div>
   {% set club = active_club(request) %}
   <details class="nav-menu" id="nav-menu">
     <summary aria-label="Menu"><span class="nav-menu-club">{% if club %}{{ club.name }}{% else %}Vælg klub{% endif %}</span><span class="nav-menu-icon" aria-hidden="true">☰</span></summary>

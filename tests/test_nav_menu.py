@@ -21,6 +21,10 @@ def test_menu_holds_the_front_page_links_and_respects_roles():
         assert 'id="show-bid-rules"' in menu and 'action="/logout"' in menu
         # The links moved off the front page's content.
         assert 'href="/rules"' not in admin.get("/").text.split("<main>", 1)[1]
+        # The Klubkasse line sits in the banner of every page once a club is active.
+        for url in ("/", "/statistics", "/account", "/rules", "/guide"):
+            banner = admin.get(url).text.split("<main>", 1)[0].split('<div class="header-info">', 1)[1]
+            assert 'class="kasse-home"' in banner and "Kassebeholdning" in banner, url
 
         member_id, temporary = _new_login(admin, "menumedlem", "Menumedlem")
         try:

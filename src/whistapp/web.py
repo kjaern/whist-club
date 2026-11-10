@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import logging
 import re
+import sqlite3
 
 from datetime import datetime, timedelta, timezone
 from fractions import Fraction
@@ -20,6 +22,8 @@ from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
 from .finance import MONEY_MODES
+from .kasse import ledger
+from .kasse.base import UnknownEntryType
 from .rule_versions import REOPEN_HOURS, night_rules
 from .rules import bid_short_names, enabled_bid_keys, load_rules
 from .vision_import import admin_llm_settings
@@ -565,3 +569,81 @@ def view_data(db, sid):
         ),
         fee=night["fejl40"],
     )
+
+
+# Klubkasse line in the banner (base.html) ------------------------------------
+
+def finalize_nights(club_id):
+    """Post the club's due nights before its balances are shown (see ledger.finalize_due).
+
+    Called when a page that shows balances is read. The request has already passed the login and
+    club checks; it posts nothing it chose itself, only what the database says is due, in its own
+    BEGIN IMMEDIATE transaction. A night that cannot be worked out is skipped (ledger.try_post_night)
+    and the others still post. If posting fails the page still shows the right I alt, because a
+    night that is not posted counts in Afventer; the page never fails because of it.
+    """
+    if club_id is None:
+        return
+    try:
+        with connect() as db:
+            if not ledger.due_nights(db, club_id):
+                return
+        with connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            ledger.finalize_due(db, club_id)
+    except (sqlite3.Error, *ledger.aftener.NIGHT_ERRORS):
+        logging.getLogger(__name__).exception("Kasse could not post due nights for club %s", club_id)
+
+
+def log_unknown_entry(exc):
+    """Log that the books were not added up because of an entry kind no file defines."""
+    logging.getLogger(__name__).error("Kasse refused to add up the books: %s", exc)
+
+
+def kasse_summary(request, books, db):
+    """The banner's figures from a balances() result: the club's cash, the viewer's own Bogført,
+    Afventer and I alt and, for the kasserer, unseen alerts."""
+    member = linked_member(request)
+    found = ledger.kasserer(db, active_club_id())
+    row = ledger.member_row(books, member["id"]) if member else None
+    return dict(cash=books["cash"],
+                own=row["balance"] if row else (Fraction() if member else None),
+                own_posted=row["posted"] if row else Fraction(), own_pending=row["pending"] if row else Fraction(),
+                alerts=ledger.unseen_alerts(db, active_club_id()) if member and found and found["id"] == member["id"] else 0)
+
+
+def kasse_banner(request):
+    """The Klubkasse line in base.html's banner: None without an active club, else kasse_summary()
+    or dict(error=True). Worked out once per request (a page that already added up the books, like
+    /kasse, stores its summary in request.state.kasse_banner first).
+
+    Due nights are posted only when a page is read (GET): a POST that renders a full page may still
+    hold its own BEGIN IMMEDIATE (fx close_error), and posting from a second connection would wait
+    for that lock. The banner never fails the page it sits on; anything that goes wrong is logged
+    and shown as the error line."""
+    club_id = active_club_id()
+    if club_id is None:
+        return None
+    if getattr(request.state, "kasse_banner", None) is not None:
+        return request.state.kasse_banner
+    if request.method == "GET":
+        finalize_nights(club_id)
+    db = None
+    try:
+        db = connect()
+        with db:
+            summary = kasse_summary(request, ledger.balances(db, club_id), db)
+    except UnknownEntryType as exc:
+        log_unknown_entry(exc)
+        summary = dict(error=True)
+    except Exception:
+        logging.getLogger(__name__).exception("Kasse banner could not be shown for club %s", club_id)
+        summary = dict(error=True)
+    finally:
+        if db is not None:
+            db.close()  # closed now: a logged traceback would otherwise keep it open
+    request.state.kasse_banner = summary
+    return summary
+
+
+templates.env.globals["kasse_banner"] = kasse_banner

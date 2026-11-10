@@ -1,7 +1,5 @@
 """Klubkasse: every member reads it; only the club's kasserer writes to it."""
 
-import logging
-import sqlite3
 from fractions import Fraction
 from html import escape
 
@@ -14,7 +12,7 @@ from ..database import connect
 from ..kasse import ledger
 from ..kasse.base import UnknownEntryType, parse_amount
 from ..kasse.registry import ENTRY_TYPES, RULE_TITLES, rule_sources
-from ..web import can_manage_club, linked_member, local_time, render
+from ..web import can_manage_club, finalize_nights, kasse_summary, linked_member, local_time, log_unknown_entry, render
 
 router = APIRouter()
 
@@ -27,33 +25,6 @@ def is_kasserer(request, db):
 
 UNKNOWN_ENTRY = ("Klubkassen kan ikke vises: den indeholder en postering af en type, appen ikke kender, "
                  "så saldi og kassebeholdning ville blive forkerte. Kontakt serveradministratoren.")
-
-
-def finalize_nights(club_id):
-    """Post the club's due nights before its balances are shown (see ledger.finalize_due).
-
-    Called when a page that shows balances is read. The request has already passed the login and
-    club checks; it posts nothing it chose itself, only what the database says is due, in its own
-    BEGIN IMMEDIATE transaction. A night that cannot be worked out is skipped (ledger.try_post_night)
-    and the others still post. If posting fails the page still shows the right I alt, because a
-    night that is not posted counts in Afventer; the page never fails because of it.
-    """
-    if club_id is None:
-        return
-    try:
-        with connect() as db:
-            if not ledger.due_nights(db, club_id):
-                return
-        with connect() as db:
-            db.execute("BEGIN IMMEDIATE")
-            ledger.finalize_due(db, club_id)
-    except (sqlite3.Error, *ledger.aftener.NIGHT_ERRORS):
-        logging.getLogger(__name__).exception("Kasse could not post due nights for club %s", club_id)
-
-
-def log_unknown_entry(exc):
-    """Log that the books were not added up because of an entry kind no file defines."""
-    logging.getLogger(__name__).error("Kasse refused to add up the books: %s", exc)
 
 
 def unknown_entry_response(exc):
@@ -72,6 +43,7 @@ def _page(request, db, error=None, status_code=200, form=None):
     except UnknownEntryType as exc:
         return unknown_entry_response(exc)
     own_id = member["id"] if member else None
+    request.state.kasse_banner = kasse_summary(request, books, db)  # the banner reuses these books
     response = render(
         request, "kasse.html",
         books=books,

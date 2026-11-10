@@ -589,3 +589,11 @@ header { position: relative; z-index: 20; flex-wrap: nowrap; }
 .nav-menu-panel a:hover, .nav-menu-panel button:hover, .nav-menu-panel a:focus-visible, .nav-menu-panel button:focus-visible { background: #344650; outline: none; }
 .nav-menu-panel hr { border: 0; border-top: 1px solid #40545e; margin: 4px 6px; }
 .nav-menu-panel hr + hr, .nav-menu-panel hr:last-child { display: none; }
+/* The banner line between the logo and the menu: the Klubkasse summary on every page with an active club (web.kasse_banner). */
+header { gap: 16px; }
+header > a:first-child { flex-shrink: 0; }
+.header-info { flex: 1; min-width: 0; font-size: .85rem; color: #d7e3e8; }
+.header-info p { margin: 0; }
+.header-info a { font-size: inherit; font-weight: 700; color: #72d7b4; text-decoration: underline; }
+.nav-menu { flex-shrink: 0; }
+@media (max-width: 700px) { header { flex-wrap: wrap; row-gap: 8px; } .header-info { order: 3; flex-basis: 100%; } .header-info:empty { display: none; } }

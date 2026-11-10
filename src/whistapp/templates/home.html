@@ -3,13 +3,6 @@
   <h1>
     Spilaftener
   </h1>
-  {% if kasse and kasse.error %}
-    <p class="kasse-home"><a href="/kasse">Klubkasse →</a> Klubkassen kan ikke vises lige nu. Kontakt serveradministratoren.</p>
-  {% elif kasse %}
-    <p class="kasse-home">
-      <a href="/kasse">Klubkasse →</a> Kassebeholdning {{ fmt(kasse.cash) }} kr{% if kasse.own is not none %} · Din saldo {{ fmt(kasse.own) }} kr{% if kasse.own < 0 %} (du skylder){% elif kasse.own > 0 %} (til gode){% endif %}: bogført {{ fmt(kasse.own_posted) }} kr, <span class="muted">afventer {{ fmt(kasse.own_pending) }} kr</span>{% endif %}{% if kasse.alerts %} · <strong>{{ kasse.alerts }} ændrede spilaftener at se på</strong>{% endif %}
-    </p>
-  {% endif %}
   <section class="card setup-card">
     <h2>
       Ny spilaften

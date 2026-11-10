@@ -133,6 +133,14 @@ SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 FORM_TYPES = ("application/x-www-form-urlencoded", "multipart/form-data")
 
 
+CSRF_MESSAGE = "Sikkerhedsnøglen mangler eller er forældet. Genindlæs siden, og prøv igen."
+
+
+class CsrfError(Exception):
+    """Raised by verify_csrf; main.py renders it as a plain-text 403 (never JSON), which base.html shows
+    for htmx requests, since htmx does not swap error responses."""
+
+
 def new_csrf_token(request):
     request.session["csrf"] = token_urlsafe(32)
     return request.session["csrf"]
@@ -150,7 +158,6 @@ async def verify_csrf(request: Request):
     The form is read with request.form(), which Starlette caches on the request, so the route reads
     the same parsed form afterwards.
     """
-    from fastapi import HTTPException
     if request.method in SAFE_METHODS or request.url.path in CSRF_EXEMPT:
         return
     expected = request.session.get("csrf")
@@ -161,7 +168,7 @@ async def verify_csrf(request: Request):
     if not isinstance(expected, str) or not sent or not compare_digest(sent, expected):
         logging.getLogger(__name__).warning("CSRF token %s for %s %s", "missing" if not sent else "invalid",
                                             request.method, request.url.path)
-        raise HTTPException(403, "Sikkerhedsnøglen mangler eller er forældet. Genindlæs siden, og prøv igen.")
+        raise CsrfError()
 
 
 def same_origin(request):

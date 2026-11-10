@@ -567,6 +567,9 @@ def init_db():
             seen_by TEXT
         )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_kasse_alerts_club ON kasse_alerts(club_id,seen_at,id)")
+        # Whether the alert's night was already posted when the alert was made; NULL for older alerts.
+        if "night_posted" not in {r[1] for r in db.execute("PRAGMA table_info(kasse_alerts)")}:
+            db.execute("ALTER TABLE kasse_alerts ADD COLUMN night_posted INTEGER")
         # When an imported night was last saved (imported, replaced or Klubkasse switched), in UTC.
         # An imported night's ended_at is the date it was played, so this starts its window before
         # the kasse posts it. Live nights use ended_at. NULL: imported before this was recorded.

@@ -313,13 +313,19 @@ def is_final(session):
     return until is not None and datetime.now(timezone.utc) >= until
 
 
+def local_minute(utc):
+    """A UTC datetime as Danish time to the minute, 'YYYY-MM-DD HH:MM'."""
+    return local_time(utc.strftime("%Y-%m-%d %H:%M:%S"))[:16]
+
+
 def reopen_deadline(session):
     """Danish time a closed night can be reopened until, for the night page."""
     until = reopen_until(session)
-    return until and local_time(until.strftime("%Y-%m-%d %H:%M:%S"))[:16]
+    return until and local_minute(until)
 
 
-templates.env.globals.update(can_reopen=can_reopen, is_final=is_final, reopen_deadline=reopen_deadline)
+templates.env.globals.update(can_reopen=can_reopen, is_final=is_final, reopen_deadline=reopen_deadline,
+                             local_minute=local_minute)
 
 
 def static_url(name):

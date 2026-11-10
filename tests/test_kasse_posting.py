@@ -115,6 +115,7 @@ def test_the_lifecycle_of_a_night_in_the_kasse(admin_in):
         assert ledger.finalize_due(db, club_id, now=NOW + timedelta(hours=11)) == []
         before = {m: _parts(db, club_id, m)[2] for m in members}
         # E. Twelve hours after the latest closing: posted once, moved from Afventer to Bogført.
+        db.execute("BEGIN IMMEDIATE")
         assert ledger.finalize_due(db, club_id, now=NOW + timedelta(hours=12, minutes=1)) == [sid]
         assert _parts(db, club_id, members[3]) == (-115, 0, -115)
         assert {m: _parts(db, club_id, m)[2] for m in members} == before
@@ -274,7 +275,14 @@ def test_the_migration_posts_final_nights_and_keeps_every_total(history_db):
         assert db.execute("SELECT source FROM kasse_night_postings WHERE session_id=?",
                           (nights["imported"],)).fetchone()[0] == "historisk"
         assert ledger.balances(db, 1)["cash"] == 50
-    # Running it again changes nothing.
+    # Running it again posts nothing twice; the night a person must look at keeps it needed and is listed again.
+    assert "kasse-post-history: needed" in migrations.status()
+    again = migrations.run("kasse-post-history")
+    assert "posted 0 nights" in again and f"aften #{nights['unknown']}" in again
+    with connect() as db:
+        assert {m: _parts(db, 1, m)[2] for m in members} == old
+        db.execute("DELETE FROM sessions WHERE id=?", (nights["unknown"],))
+    # Once it is dealt with, the migration is done.
     assert "already done" in migrations.run("kasse-post-history")
 
 
@@ -371,6 +379,139 @@ def test_members_see_their_own_three_figures_and_cannot_book(logins):
         with connect() as db:
             db.execute("DELETE FROM sessions WHERE id=?", (sid,))
             db.executemany("DELETE FROM club_members WHERE id=?", [(m,) for m in others])
+
+
+# Review fixes -----------------------------------------------------------------------------
+
+def test_a_broken_night_is_skipped_and_the_others_still_post(admin_in):
+    admin, club_id, members = admin_in
+    with connect() as db:
+        _started(db, club_id)
+        good = _closed_night(db, club_id, members, [0, 25, 75, 115])
+        broken = _closed_night(db, club_id, members, [0, 1, 2, 3])
+        db.execute("UPDATE sessions SET rule_version_id=NULL WHERE id=?", (broken,))
+        _ended_hours_ago(db, good, 13)
+        _ended_hours_ago(db, broken, 13)
+    # The pages post what they can and never fail because of the broken night.
+    assert admin.get("/kasse").status_code == 200 and admin.get("/").status_code == 200
+    with connect() as db:
+        assert _postings(db, good) == 1 and _postings(db, broken) == 0
+        # No half-written posting: no charges and no log line for the broken night.
+        assert db.execute("SELECT COUNT(*) FROM kasse_night_charges WHERE club_id=?", (club_id,)).fetchone()[0] == 3
+        assert db.execute("SELECT COUNT(*) FROM kasse_log WHERE club_id=? AND entity='night' AND entity_id=?",
+                          (club_id, broken)).fetchone()[0] == 0
+        assert [n["id"] for n in ledger.balances(db, club_id)["pending_nights"] if n["error"]] == [broken]
+        db.execute("BEGIN IMMEDIATE")
+        assert ledger.finalize_due(db, club_id) == []
+    # Posting outside a transaction is refused rather than committed early.
+    with connect() as db:
+        with pytest.raises(RuntimeError, match="BEGIN IMMEDIATE"):
+            ledger.finalize_due(db, club_id)
+
+
+def test_the_migration_lists_a_history_night_it_cannot_work_out(history_db):
+    members, nights = history_db
+    with connect() as db:
+        db.execute("UPDATE sessions SET rule_version_id=NULL WHERE id=?", (nights["imported"],))
+    result = migrations.run("kasse-post-history")
+    assert "posted 1 nights" in result and f"aften #{nights['imported']}" in result
+    with connect() as db:
+        assert _postings(db, nights["imported"]) == 0
+    # It stays needed while the broken night waits, and every run lists it.
+    assert "kasse-post-history: needed" in migrations.status()
+    assert f"aften #{nights['imported']}" in migrations.run("kasse-post-history")
+    with connect() as db:
+        db.execute("DELETE FROM sessions WHERE id IN (?,?)", (nights["imported"], nights["unknown"]))
+    assert "kasse-post-history: done" in migrations.status()
+
+
+def test_a_delete_alert_after_an_id_was_reused_is_not_posted(club):
+    club_id, members = club
+    with connect() as db:
+        _started(db, club_id)
+        old = _closed_night(db, club_id, members, [0, 25, 75, 115], origin="imported")
+        db.execute("UPDATE sessions SET saved_at=datetime('now','-13 hours') WHERE id=?", (old,))
+        assert ledger.finalize_due(db, club_id) == [old]
+        with ledger.watch(db, old, "delete"):
+            db.execute("DELETE FROM sessions WHERE id=?", (old,))
+        new = _closed_night(db, club_id, members, [0, 1, 2, 3], origin="imported")
+        assert new == old  # SQLite reused the id
+        with ledger.watch(db, new, "delete"):
+            db.execute("DELETE FROM sessions WHERE id=?", (new,))
+        first, second = sorted((a for a in ledger.alerts(db, club_id) if a["kind"] == "delete"), key=lambda a: a["id"])
+        assert first["posted"] and not second["posted"]
+
+
+def test_an_alert_about_a_night_that_reuses_a_posted_id_is_not_posted(club):
+    club_id, members = club
+    with connect() as db:
+        _started(db, club_id)
+        old = _closed_night(db, club_id, members, [0, 25, 75, 115])
+        _ended_hours_ago(db, old, 13)
+        assert ledger.finalize_due(db, club_id) == [old]
+        with ledger.watch(db, old, "delete"):
+            db.execute("DELETE FROM sessions WHERE id=?", (old,))
+        new = _closed_night(db, club_id, members, [0, 1, 2, 3])
+        assert new == old  # SQLite reused the id
+        ledger.add_alert(db, new, "reopen", ledger.snapshot(db, new), None)
+        posted = {a["kind"]: a["posted"] for a in ledger.alerts(db, club_id)}
+        # The deleted night was posted; the new night with the same id was not.
+        assert posted == {"delete": True, "reopen": False}
+
+
+def test_the_history_migration_is_needed_only_for_imported_history(history_db):
+    from whistapp.migrations import kasse_post_history
+    _, nights = history_db
+    with connect() as db:
+        assert kasse_post_history.needed(db)
+        # An unclassifiable night needs a person, so it keeps the migration needed.
+        db.execute("UPDATE sessions SET saved_at=CURRENT_TIMESTAMP WHERE id=?", (nights["imported"],))
+        assert kasse_post_history.needed(db)
+        # Only a due live night is left, which the app posts by itself.
+        db.execute("DELETE FROM sessions WHERE id=?", (nights["unknown"],))
+        assert ledger.due_nights(db, 1) and not kasse_post_history.needed(db)
+    assert "kasse-post-history: done" in migrations.status()
+
+
+def test_a_live_night_with_an_unreadable_closing_time_is_explained(admin_in):
+    admin, club_id, members = admin_in
+    with connect() as db:
+        _started(db, club_id)
+        sid = _closed_night(db, club_id, members, [0, 25, 75, 115])
+        db.execute("UPDATE sessions SET ended_at='ukendt' WHERE id=?", (sid,))
+    page = admin.get("/kasse").text
+    assert "tidspunktet for afslutningen kan ikke læses" in page and "en serveradministrator skal se på aftenen" in page
+    assert "kasse-post-history" not in page
+
+
+def test_an_open_night_started_long_ago_is_flagged(admin_in):
+    admin, club_id, members = admin_in
+    with connect() as db:
+        _started(db, club_id)
+        fresh = _open_night(db, club_id, members, title="Frisk")
+        old = _open_night(db, club_id, members, title="Glemt")
+        db.execute("UPDATE sessions SET created_at=datetime('now','-2 days') WHERE id=?", (old,))
+        pending = {n["id"]: n for n in ledger.balances(db, club_id)["pending_nights"]}
+        assert pending[old]["stale"] and not pending[fresh]["stale"]
+        assert ledger.member_row(ledger.balances(db, club_id), members[3])["pending_nights"][1]["stale"]
+        date = pending[old]["date"]
+    page = admin.get("/kasse").text
+    assert page.count(f"åben siden {date} – mangler den at blive afsluttet?") == 1
+
+
+def test_posted_nights_sum_their_charges_as_fractions(club):
+    club_id, members = club
+    with connect() as db:
+        _started(db, club_id)
+        first = _closed_night(db, club_id, members, ["1/3", "1/3", "1/3", 0], penalty_member=members[3])
+        nothing = _closed_night(db, club_id, members, [0, 0, 0, 0])
+        _ended_hours_ago(db, first, 13)
+        _ended_hours_ago(db, nothing, 13)
+        assert ledger.finalize_due(db, club_id) == [first, nothing]
+        # Newest first; a posting without charges totals 0.
+        totals = [(p["session_id"], p["total"]) for p in ledger.posted_nights(db, club_id)]
+        assert totals == [(nothing, Fraction(0)), (first, Fraction(41))]
+        assert [p["session_id"] for p in ledger.posted_nights(db, club_id, limit=1)] == [nothing]
 
 
 def test_posting_belongs_to_one_club(club):

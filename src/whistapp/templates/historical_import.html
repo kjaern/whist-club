@@ -508,6 +508,8 @@ input[readonly] { background:#293943; color:#e8eff3; opacity:1; cursor:default; 
         method: 'POST', headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken()},
         body: JSON.stringify({players, hand:handData(row)})
       });
+      // A refused request (fx a stale CSRF token) explains itself in plain text.
+      if (response.status === 403) throw new Error(await response.text());
       if (!response.ok) throw new Error('Serverfejl (' + response.status + ')');
       const result = await response.json();
       if (row.dataset.checkSerial !== String(serial) || JSON.stringify(handData(row)) !== snapshot) return;
@@ -787,12 +789,14 @@ input[readonly] { background:#293943; color:#e8eff3; opacity:1; cursor:default; 
         method: 'POST', headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken()},
         body: JSON.stringify(payload)
       });
+      // A refused request (fx a stale CSRF token) explains itself in plain text.
+      if (response.status === 403) throw Object.assign(new Error(await response.text()), {refused: true});
       if (!response.ok) throw new Error('Kunne ikke gemme');
       const status = document.getElementById('import-draft-status');
       if (status) status.textContent = 'Gemt';
-    } catch (_) {
+    } catch (error) {
       const status = document.getElementById('import-draft-status');
-      if (status) status.textContent = 'Kunne ikke gemme – prøv igen';
+      if (status) status.textContent = error.refused ? 'Kunne ikke gemme – ' + error.message : 'Kunne ikke gemme – prøv igen';
     }
   }
   if (draftId) {

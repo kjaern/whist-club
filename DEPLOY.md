@@ -122,8 +122,9 @@ docker compose exec whist whistapp migrate kasse-post-history
 ```
 
 It posts each such night once, with the amounts the old saldo already counted, so every member's
-I alt stays the same. Nights it cannot classify (fx an unreadable date) are listed, not posted, and
-stay in Afventer. Running it again posts nothing twice.
+I alt stays the same. Nights it cannot classify or work out (fx an unreadable date or no rule
+version) are listed, not posted, and stay in Afventer; while such a night is left, the migration
+shows as needed and lists it again on every run. Running it again posts nothing twice.
 
 ### Removing a club
 

@@ -30,18 +30,32 @@ def _readable_date(night):
         return False
 
 
+def _workable(db, night):
+    """True if what the night charges can be worked out; a broken night is listed, never planned."""
+    try:
+        aftener.night_parts(db, night["id"])
+        return True
+    except aftener.NIGHT_ERRORS:
+        return False
+
+
 def _plan(db):
-    """(club id, night, source) to post, and Danish lines about nights left for review."""
-    todo, review = [], []
+    """([(club id, night, source)] to post, Danish lines about what is left, and whether any of those
+    lines is a night a person must look at; a club whose kasse has not started is only waiting)."""
+    todo, review, stuck = [], [], False
     for c in db.execute("SELECT id,name,kasse_start,kasse_started_at FROM clubs ORDER BY id").fetchall():
-        nights = [n for n in ledger._night_rows(db, c["id"]) if not aftener.before_start(n, c["kasse_start"])]
+        nights = [n for n in aftener.unposted_nights(db, c["id"], closed_only=True) if not aftener.before_start(n, c["kasse_start"])]
         if not c["kasse_started_at"]:
             if nights:
                 review.append(f"{c['name']}: kassens start er ikke sat; {len(nights)} aftener afventer, til den er sat")
             continue
         due = {n["id"] for n in ledger.due_nights(db, c["id"])}
         for n in nights:
-            if n["id"] in due:
+            if (n["id"] in due or n["origin"] == "imported") and not _workable(db, n):
+                review.append(f"{c['name']}: aften #{n['id']} {n['title']!r}: beløbene kan ikke beregnes "
+                              "(fx ingen regelversion); den afventer fortsat")
+                stuck = True
+            elif n["id"] in due:
                 todo.append((c["id"], n, "spilaften"))
             elif aftener.closed_at(n) is not None:
                 continue  # still inside its window; the app posts it when it is due
@@ -50,11 +64,16 @@ def _plan(db):
             else:
                 review.append(f"{c['name']}: aften #{n['id']} {n['title']!r} ({n['origin']}, dato {n['created_at']!r}, "
                               f"afsluttet {n['ended_at']!r}) kan ikke klassificeres sikkert og afventer fortsat")
-    return todo, review
+                stuck = True
+    return todo, review, stuck
 
 
 def needed(db):
-    return bool(_plan(db)[0])
+    """Historical imported nights to post, or nights a person must look at. Due live nights alone
+    never make it needed: the app posts those by itself. While a night needs a person it stays
+    needed, and each run lists it again."""
+    todo, _, stuck = _plan(db)
+    return stuck or any(source == "historisk" for _, _, source in todo)
 
 
 def blockers(db):
@@ -62,8 +81,8 @@ def blockers(db):
 
 
 def run(db):
-    todo, review = _plan(db)
-    posted = sum(ledger.post_night(db, club_id, night, source) for club_id, night, source in todo)
+    todo, review, _ = _plan(db)
+    posted = sum(ledger.try_post_night(db, club_id, night, source) for club_id, night, source in todo)
     lines = [f"posted {posted} nights"]
     if review:
         lines.append("left in Afventer for review:\n    " + "\n    ".join(review))

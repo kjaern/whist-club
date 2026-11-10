@@ -25,7 +25,7 @@ from ..buildinfo import build_stamp
 from ..database import connect
 from ..kasse import ledger as kasse
 from ..kasse.base import UnknownEntryType
-from .kasse import finalize_nights
+from .kasse import finalize_nights, log_unknown_entry
 from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rule_versions import is_club_night, latest_version, night_rules, stamp_night
 from .rules import version_name
@@ -101,7 +101,7 @@ def _kasse_summary(db, request):
     try:
         books = kasse.balances(db, active_club_id())
     except UnknownEntryType as exc:
-        logging.getLogger(__name__).error("Kasse refused to add up the books: %s", exc)
+        log_unknown_entry(exc)
         return dict(error=True)
     row = kasse.member_row(books, member["id"]) if member else None
     return dict(cash=books["cash"],

@@ -13,6 +13,8 @@ Every function takes the club id; the routes pass active_club_id().
 """
 
 import json
+import logging
+import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from fractions import Fraction
@@ -22,6 +24,9 @@ from ..database import audit_actor
 from . import aftener
 from .base import UnknownEntryType
 from .registry import get_type
+
+logger = logging.getLogger(__name__)
+
 
 def today():
     return datetime.now(ZoneInfo("Europe/Copenhagen")).date().isoformat()
@@ -323,7 +328,7 @@ def balances(db, club_id):
             if mid in members and amount:
                 members[mid]["pending"] -= amount
                 members[mid]["pending_nights"].append(dict(id=night["id"], title=night["title"], date=night["date"],
-                                                           open=night["open"], amount=-amount))
+                                                           open=night["open"], stale=night["stale"], amount=-amount))
     cash = opening
     for row in _entry_rows(db, club_id):
         effect = _effect(row)
@@ -362,13 +367,6 @@ def member_row(books, member_id):
 # the caller's BEGIN IMMEDIATE, and kasse_night_postings.session_id is UNIQUE, so two requests
 # can never post the same night twice.
 
-def _night_rows(db, club_id):
-    return db.execute("""SELECT id,title,created_at,ended_at,origin,saved_at FROM sessions s
-        WHERE club_id=? AND ended_at IS NOT NULL AND collect_club_money=1
-        AND NOT EXISTS (SELECT 1 FROM kasse_night_postings p WHERE p.session_id=s.id) ORDER BY id""",
-                      (club_id,)).fetchall()
-
-
 def due_nights(db, club_id, now=None):
     """The club's closed nights with Klubkasse whose window has passed and that are not posted yet.
 
@@ -380,7 +378,7 @@ def due_nights(db, club_id, now=None):
         return []
     now = now or datetime.now(timezone.utc)
     due = []
-    for night in _night_rows(db, club_id):
+    for night in aftener.unposted_nights(db, club_id, closed_only=True):
         final = aftener.final_at(night)
         if final is not None and final <= now and not aftener.before_start(night, current["kasse_start"]):
             due.append(night)
@@ -416,27 +414,44 @@ def post_night(db, club_id, night, source="spilaften"):
     return True
 
 
+def try_post_night(db, club_id, night, source="spilaften"):
+    """post_night, but a night whose charges cannot be worked out (aftener.NIGHT_ERRORS) is skipped
+    and logged instead of stopping the others. A savepoint undoes whatever it wrote, so a
+    half-written posting is never left behind; the night stays in Afventer, flagged as an error.
+
+    The caller must hold a transaction (BEGIN IMMEDIATE): outside one, SQLite's SAVEPOINT would open
+    its own and RELEASE would commit it early, without the write lock that makes posting exactly-once."""
+    if not db.in_transaction:
+        raise RuntimeError("try_post_night needs the caller's transaction (BEGIN IMMEDIATE)")
+    db.execute("SAVEPOINT kasse_post_night")
+    try:
+        posted = post_night(db, club_id, night, source)
+    except (*aftener.NIGHT_ERRORS, sqlite3.IntegrityError):
+        db.execute("ROLLBACK TO kasse_post_night"); db.execute("RELEASE kasse_post_night")
+        logger.warning("Kasse cannot post night %s of club %s; it stays in Afventer", night["id"], club_id, exc_info=True)
+        return False
+    db.execute("RELEASE kasse_post_night")
+    return posted
+
+
 def finalize_due(db, club_id, now=None):
     """Post every due night of the club; the caller holds BEGIN IMMEDIATE. Returns the posted night ids.
-    Safe to call again and again: a posted night is never due."""
-    return [night["id"] for night in due_nights(db, club_id, now) if post_night(db, club_id, night)]
+    Safe to call again and again: a posted night is never due. A broken night does not stop the others."""
+    return [night["id"] for night in due_nights(db, club_id, now) if try_post_night(db, club_id, night)]
 
 
 def posted_nights(db, club_id, limit=100):
     """Posted nights, newest first, with what each charged in all."""
-    return [dict(r, total=_posting_total(db, r["id"]))
-            for r in db.execute("""SELECT id,session_id,deleted_session_id,session_title,night_date,source,closed_at,
-                posted_at FROM kasse_night_postings WHERE club_id=? ORDER BY id DESC LIMIT ?""", (club_id, limit))]
-
-
-def _posting_total(db, posting_id):
-    return sum((Fraction(n, d) for n, d in db.execute(
-        "SELECT amount_numerator,amount_denominator FROM kasse_night_charges WHERE posting_id=?", (posting_id,))),
-        Fraction())
-
-
-def is_posted(db, sid):
-    return db.execute("SELECT 1 FROM kasse_night_postings WHERE session_id=?", (sid,)).fetchone() is not None
+    fields = ("id", "session_id", "deleted_session_id", "session_title", "night_date", "source", "closed_at", "posted_at")
+    nights = {}
+    # One query: a row per charge (or one with no charge), summed per posting as Fractions.
+    for r in db.execute(f"""SELECT {",".join("p." + f for f in fields)},c.amount_numerator,c.amount_denominator
+            FROM (SELECT * FROM kasse_night_postings WHERE club_id=? ORDER BY id DESC LIMIT ?) p
+            LEFT JOIN kasse_night_charges c ON c.posting_id=p.id ORDER BY p.id DESC""", (club_id, limit)):
+        night = nights.setdefault(r["id"], dict({f: r[f] for f in fields}, total=Fraction()))
+        if r["amount_numerator"] is not None:
+            night["total"] += Fraction(r["amount_numerator"], r["amount_denominator"])
+    return list(nights.values())
 
 
 # Alerts: a night that already counted in the kasse changed --------------------
@@ -464,22 +479,28 @@ def _counted_start(db, club_id):
     return current["kasse_start"] if current["kasse_started_at"] else None
 
 
-def _insert_alert(db, night, kind, before, after):
+def _posted(db, sid):
+    """Is the night posted right now? Asked before a change, so a deleted night is still found by its id."""
+    return db.execute("SELECT 1 FROM kasse_night_postings WHERE session_id=?", (sid,)).fetchone() is not None
+
+
+def _insert_alert(db, night, kind, before, after, posted):
     # Nothing changed, or the night is from before the kasse started and never counts.
     if after is not None and before == after:
         return
     if aftener.before_start(night, _counted_start(db, night["club_id"])):
         return
-    db.execute("""INSERT INTO kasse_alerts(club_id,session_id,session_title,kind,actor_username,before_json,after_json)
-        VALUES (?,?,?,?,?,?,?)""", (night["club_id"], night["id"], night["title"], kind, audit_actor()[0],
-                                    json.dumps(before), None if after is None else json.dumps(after)))
+    db.execute("""INSERT INTO kasse_alerts(club_id,session_id,session_title,kind,actor_username,before_json,after_json,
+        night_posted) VALUES (?,?,?,?,?,?,?,?)""",
+               (night["club_id"], night["id"], night["title"], kind, audit_actor()[0],
+                json.dumps(before), None if after is None else json.dumps(after), int(posted)))
 
 
 def add_alert(db, sid, kind, before, after):
     """Tell the kasserer a night's charges changed. after=None: not known yet (a reopened night)."""
     night = _night(db, sid)
     if night:
-        _insert_alert(db, night, kind, before, after)
+        _insert_alert(db, night, kind, before, after, _posted(db, sid))
 
 
 def _pending_reopen(db, sid):
@@ -497,11 +518,12 @@ def watch(db, sid, kind):
     night = _night(db, sid)
     pending = _pending_reopen(db, sid)
     before = json.loads(pending["before_json"]) if pending else snapshot(db, sid)
+    posted = _posted(db, sid)  # before the block: deleting the night moves its posting off session_id
     yield
     if pending:
         db.execute("DELETE FROM kasse_alerts WHERE id=?", (pending["id"],))
     if night:
-        _insert_alert(db, night, kind, before, snapshot(db, sid))
+        _insert_alert(db, night, kind, before, snapshot(db, sid), posted)
 
 
 def complete_reopen_alert(db, sid):
@@ -541,9 +563,15 @@ def alerts(db, club_id, limit=50):
             old, new = before.get(mid, Fraction()), None if after is None else after.get(mid, Fraction())
             changes.append(dict(member_id=mid, name=names.get(mid, f"#{mid}"), before=old, after=new,
                                 diff=None if new is None else new - old))
-        # A posted night's charges stay as posted; the kasserer decides on a korrektion.
-        posted = db.execute("""SELECT 1 FROM kasse_night_postings WHERE club_id=? AND (session_id=? OR deleted_session_id=?)
-            AND posted_at<=?""", (club_id, r["session_id"], r["session_id"], r["created_at"])).fetchone() is not None
+        # A posted night's charges stay as posted; the kasserer decides on a korrektion. The alert
+        # records whether its night was posted when it was made, so a reused night id never misleads.
+        # Alerts from before night_posted was recorded fall back to matching the posting by id.
+        if r["night_posted"] is not None:
+            posted = bool(r["night_posted"])
+        else:
+            column = "deleted_session_id" if r["kind"] == "delete" else "session_id"
+            posted = db.execute(f"""SELECT 1 FROM kasse_night_postings WHERE club_id=? AND {column}=? AND posted_at<=?""",
+                                (club_id, r["session_id"], r["created_at"])).fetchone() is not None
         rows.append(dict(r, kind_label=ALERT_KINDS.get(r["kind"], r["kind"]), changes=changes, pending=after is None,
                          posted=posted))
     return rows

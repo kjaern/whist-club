@@ -99,29 +99,58 @@ def final_at(night):
     return closed + timedelta(hours=REOPEN_HOURS) if closed else None
 
 
-def pending_nights(db, club_id, kasse_start):
+# What working out a night's charges raises when its data is broken (fx a night without a rule
+# version). Such a night is never posted and charges nothing in Afventer until a person looks at it.
+NIGHT_ERRORS = (ValueError, KeyError, TypeError, ZeroDivisionError, IndexError)
+
+# An open night started longer ago than this is flagged: it may have been forgotten.
+STALE_OPEN_HOURS = 24
+
+
+def unposted_nights(db, club_id, closed_only=False):
+    """The club's nights the kasse has not posted, oldest first: closed nights with Klubkasse and,
+    unless closed_only, open nights. The one place that says which nights may still be posted."""
+    which = "ended_at IS NOT NULL AND collect_club_money=1" if closed_only else "(ended_at IS NULL OR collect_club_money=1)"
+    return db.execute(f"""SELECT id,title,created_at,ended_at,origin,saved_at FROM sessions s
+        WHERE club_id=? AND {which}
+        AND NOT EXISTS (SELECT 1 FROM kasse_night_postings p WHERE p.session_id=s.id) ORDER BY id""",
+                      (club_id,)).fetchall()
+
+
+def _started_at(night):
+    """UTC time a live night was started, or None (an imported night's created_at is a typed date)."""
+    if night["origin"] == "imported":
+        return None
+    try:
+        return datetime.strptime(str(night["created_at"]), STAMP).replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def pending_nights(db, club_id, kasse_start, now=None):
     """Nights that count but are not posted yet, oldest first, each with what it charges now.
 
     Open club nights and closed nights with Klubkasse that the kasse has not posted. A night whose
     amounts cannot be worked out right now is listed with error set and charges nothing yet.
+    stale: an open night started more than STALE_OPEN_HOURS ago, which may have been forgotten.
     """
-    rows = db.execute("""SELECT id,title,created_at,ended_at,origin,saved_at FROM sessions s
-        WHERE club_id=? AND (ended_at IS NULL OR collect_club_money=1)
-        AND NOT EXISTS (SELECT 1 FROM kasse_night_postings p WHERE p.session_id=s.id) ORDER BY id""",
-                      (club_id,)).fetchall()
+    now = now or datetime.now(timezone.utc)
     result = []
-    for night in rows:
+    for night in unposted_nights(db, club_id):
         if before_start(night, kasse_start):
             continue
         error = False
         try:
             parts = night_parts(db, night["id"]) if night["ended_at"] else open_night_parts(db, night["id"])
-        except (ValueError, KeyError, TypeError, ZeroDivisionError, IndexError):
+        except NIGHT_ERRORS:
             logging.getLogger(__name__).warning("Kasse cannot work out what night %s charges", night["id"], exc_info=True)
             parts, error = ({}, {}), True
         if not error and not any(parts[0].values()) and not any(parts[1].values()):
             continue
-        result.append(dict(id=night["id"], title=night["title"], date=night_date(night), open=night["ended_at"] is None,
+        is_open, started = night["ended_at"] is None, _started_at(night)
+        result.append(dict(id=night["id"], title=night["title"], date=night_date(night), open=is_open,
+                           stale=is_open and started is not None and now - started > timedelta(hours=STALE_OPEN_HOURS),
+                           origin=night["origin"], saved_at=night["saved_at"],
                            final_at=final_at(night), settlement=parts[0], fejl40=parts[1], error=error))
     return result
 

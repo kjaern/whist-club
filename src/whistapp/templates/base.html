@@ -12,6 +12,11 @@
         <script>
           function csrfToken() { return document.querySelector('meta[name="csrf-token"]').content; }
           document.addEventListener('htmx:configRequest', event => { event.detail.headers['X-CSRF-Token'] = csrfToken(); });
+          {# htmx does not swap error responses, so a refused change (fx a stale CSRF token) would vanish silently. Show the server's plain-text 403 message; no reload, so typed input is kept. #}
+          document.addEventListener('htmx:responseError', event => {
+            const xhr = event.detail.xhr;
+            if (xhr.status === 403 && (xhr.getResponseHeader('Content-Type') || '').startsWith('text/plain')) alert(xhr.responseText);
+          });
         </script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     </head>

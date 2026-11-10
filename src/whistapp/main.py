@@ -4,7 +4,9 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth import authenticated, current_account, is_server_admin, same_origin, setup_session, verify_csrf
+from .auth import (
+    CSRF_MESSAGE, CsrfError, authenticated, current_account, is_server_admin, same_origin, setup_session, verify_csrf,
+)
 from .club import active_club_id, active_club_reset, active_club_set
 from .database import (
     audit_actor_reset,
@@ -33,6 +35,12 @@ async def lifespan(_app):
 
 # Every route: a state-changing request must carry the session's CSRF token (auth.verify_csrf).
 app = FastAPI(title="Whist", lifespan=lifespan, dependencies=[Depends(verify_csrf)])
+
+
+@app.exception_handler(CsrfError)
+async def csrf_rejected(_request: Request, _exc: CsrfError):
+    # Plain text like the middleware's refusals; htmx requests show it via base.html's htmx:responseError.
+    return PlainTextResponse(CSRF_MESSAGE, status_code=403)
 
 
 @app.middleware("http")

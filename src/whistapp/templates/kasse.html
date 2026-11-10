@@ -46,7 +46,7 @@
       </table>
       {% if own.pending_nights %}
         <p class="muted">Afventer kommer fra:
-          {% for n in own.pending_nights %}<a href="/sessions/{{ n.id }}">{{ n.title }} ({{ n.date }})</a> {{ fmt(n.amount) }} kr{% if n.open %} (åben){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+          {% for n in own.pending_nights %}<a href="/sessions/{{ n.id }}">{{ n.title }} ({{ n.date }})</a> {{ fmt(n.amount) }} kr{% if n.stale %} (åben siden {{ n.date }} – mangler den at blive afsluttet?){% elif n.open %} (åben){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
         </p>
       {% endif %}
     </section>
@@ -83,10 +83,12 @@
         {% for n in books.pending_nights %}
           <li><a href="/sessions/{{ n.id }}">{{ n.title }}</a> ({{ n.date }}):
             {% if n.error %}beløbet kan ikke beregnes lige nu og tæller ikke med endnu.
+            {% elif n.stale %}åben siden {{ n.date }} – mangler den at blive afsluttet? Beløbene følger aftenen og forudsætter, at den afsluttes med klubkasse.
             {% elif n.open %}åben; beløbene følger aftenen og forudsætter, at den afsluttes med klubkasse.
             {% elif not books.started %}bogføres, når kassens start er sat.
-            {% elif n.final_at %}bogføres {{ local_time(n.final_at.strftime('%Y-%m-%d %H:%M:%S'))[:16] }}.
-            {% else %}afsluttet før appen huskede, hvornår importen blev gemt; bogføres, når serveradministratoren har gennemgået den (whistapp migrate kasse-post-history).{% endif %}
+            {% elif n.final_at %}bogføres {{ local_minute(n.final_at) }}.
+            {% elif n.origin == 'imported' and not n.saved_at %}afsluttet før appen huskede, hvornår importen blev gemt; bogføres, når serveradministratoren har gennemgået den (whistapp migrate kasse-post-history).
+            {% else %}afsluttet, men tidspunktet for afslutningen kan ikke læses; kassen gætter ikke, så en serveradministrator skal se på aftenen.{% endif %}
           </li>
         {% endfor %}
       </ul>

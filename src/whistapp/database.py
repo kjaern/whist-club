@@ -567,3 +567,38 @@ def init_db():
             seen_by TEXT
         )""")
         db.execute("CREATE INDEX IF NOT EXISTS idx_kasse_alerts_club ON kasse_alerts(club_id,seen_at,id)")
+        # When an imported night was last saved (imported, replaced or Klubkasse switched), in UTC.
+        # An imported night's ended_at is the date it was played, so this starts its window before
+        # the kasse posts it. Live nights use ended_at. NULL: imported before this was recorded.
+        if "saved_at" not in {r[1] for r in db.execute("PRAGMA table_info(sessions)")}:
+            db.execute("ALTER TABLE sessions ADD COLUMN saved_at TEXT")
+        # A night's charges, posted once REOPEN_HOURS after it was last closed (kasse/ledger.py
+        # finalize_due). Posted rows are never changed: a mistake is set right with a korrektion.
+        # session_id is the night's unique source; a deleted night's posting keeps the old id in
+        # deleted_session_id, so a later night that reuses the id is posted on its own.
+        db.execute("""CREATE TABLE IF NOT EXISTS kasse_night_postings (
+            id INTEGER PRIMARY KEY,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            session_id INTEGER UNIQUE,
+            deleted_session_id INTEGER,
+            session_title TEXT NOT NULL,
+            night_date TEXT NOT NULL,
+            source TEXT NOT NULL CHECK(source IN ('spilaften','historisk')),
+            closed_at TEXT,
+            posted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS kasse_night_charges (
+            id INTEGER PRIMARY KEY,
+            posting_id INTEGER NOT NULL REFERENCES kasse_night_postings(id) ON DELETE CASCADE,
+            club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+            member_id INTEGER NOT NULL REFERENCES club_members(id),
+            part TEXT NOT NULL CHECK(part IN ('aften','fejl40')),
+            amount_numerator INTEGER NOT NULL,
+            amount_denominator INTEGER NOT NULL,
+            UNIQUE(posting_id, member_id, part)
+        )""")
+        db.execute("CREATE INDEX IF NOT EXISTS idx_kasse_night_charges_club ON kasse_night_charges(club_id,member_id)")
+        db.execute("""CREATE TRIGGER IF NOT EXISTS kasse_posting_night_deleted
+            AFTER DELETE ON sessions BEGIN
+            UPDATE kasse_night_postings SET deleted_session_id=OLD.id, session_id=NULL WHERE session_id=OLD.id;
+            END""")

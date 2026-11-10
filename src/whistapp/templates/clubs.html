@@ -3,7 +3,7 @@
 {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
 <section class="card"><h2>Dine klubber</h2>
 {% for club in clubs %}
-<form method="post" action="/clubs/select" class="fee-inline">
+<form method="post" action="/clubs/select" class="fee-inline">{{ csrf_field(request) }}
 <input type="hidden" name="club_id" value="{{ club.id }}">
 <button type="submit" {% if club.id != current %}class="secondary"{% endif %}>{{ club.name }}</button>
 {% if club.id == current %}<span class="muted">Valgt nu</span>{% endif %}
@@ -13,11 +13,11 @@
 {% if can_create %}
 <section class="card"><h2>Opret ny klub</h2>
 <p class="muted">Du bliver klubadministrator i den nye klub. Medlemmer, aliaser, satser og statistik er adskilt fra de andre klubber.</p>
-<form method="post" action="/clubs/new">
+<form method="post" action="/clubs/new">{{ csrf_field(request) }}
 <label>Klubnavn<input name="name" value="{{ name }}" required maxlength="80"></label>
 <button type="submit">Opret klub</button>
 </form>
-<form method="post" action="/clubs/new-test">
+<form method="post" action="/clubs/new-test">{{ csrf_field(request) }}
 <p class="muted">Eller opret en testklub med opdigtede medlemmer og 10–15 afsluttede spilaftener om året i fem år, til at prøve statistik og grafer.</p>
 <button type="submit" class="secondary">Opret testklub med dummy-aftener</button>
 </form></section>

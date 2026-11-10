@@ -14,9 +14,9 @@ import sqlite3
 from datetime import datetime
 
 from ..database import connect, db_path
-from . import drop_night_rule_columns
+from . import drop_night_rule_columns, kasse_post_history
 
-MIGRATIONS = [drop_night_rule_columns]
+MIGRATIONS = [drop_night_rule_columns, kasse_post_history]
 
 
 def status():

@@ -17,7 +17,7 @@
       <p>Ingen AI-udbyder er konfigureret.</p>
     {% endif %}
     <p class="muted">{% if llm_settings.has_api_key %}En API-nøgle er gemt. Den vises aldrig her; lad feltet stå tomt for at beholde den.{% else %}En API-nøgle er valgfri for udbydere, der ikke kræver den.{% endif %}</p>
-    <form method="post" action="/admin/ai/llm">
+    <form method="post" action="/admin/ai/llm">{{ csrf_field(request) }}
       <label>Base URL
         <input name="base_url" type="url" value="{{ llm_form_values.get('base_url', llm_settings.base_url) }}" placeholder="https://api.example.com/v1" required>
       </label>
@@ -30,7 +30,7 @@
       <button type="submit">Gem AI-udbyder</button>
     </form>
     {% if llm_settings.can_remove %}
-      <form method="post" action="/admin/ai/llm/remove" style="margin-top:.75rem">
+      <form method="post" action="/admin/ai/llm/remove" style="margin-top:.75rem">{{ csrf_field(request) }}
         <button type="submit" class="secondary">Fjern AI-udbyder</button>
       </form>
     {% endif %}
@@ -41,7 +41,7 @@
     {% if notice == 'limits' %}<p role="status">Grænserne er gemt.</p>{% endif %}
     {% if error and error_section == 'limits' %}<p role="alert" class="error">{{ error }}</p>{% endif %}
     <p class="muted">Prisen afhænger af fotoene, der sendes, og af svarets længde. Ventetiden styrer kun, hvor længe appen venter; udbyderen kan stadig tage betaling for et svar, der kommer for sent.</p>
-    <form method="post" action="/admin/ai/limits">
+    <form method="post" action="/admin/ai/limits">{{ csrf_field(request) }}
       <label>Højst antal fotos
         <input name="max_images" type="number" min="1" max="30" value="{{ limits.max_images }}" required>
       </label>
@@ -62,7 +62,7 @@
     <h2>Klubber</h2>
     <p class="muted">Vælg, hvilke klubber der må bruge AI-import. AI-noterne sendes med til modellen ved klubbens fotoimport, fx kælenavne på arkene eller bekræftede eksempler fra klubbens egne aftener. De gemmes i databasen, ikke i koden.</p>
     {% for club in clubs %}
-      <form method="post" action="/admin/ai/clubs/{{ club.id }}" id="club-{{ club.id }}" class="ai-club">
+      <form method="post" action="/admin/ai/clubs/{{ club.id }}" id="club-{{ club.id }}" class="ai-club">{{ csrf_field(request) }}
         <h3>{{ club.name }}</h3>
         {% if notice == 'club-' ~ club.id %}<p role="status">Gemt.</p>{% endif %}
         {% if error and error_section == 'club-' ~ club.id %}<p role="alert" class="error">{{ error }}</p>{% endif %}

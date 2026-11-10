@@ -6,16 +6,18 @@
   <p>
     <a href="/import">Importer spilaften →</a> · <a href="/rules">Regelhistorik →</a>{% if not member_view %} · <a href="/club">Klubadministration →</a>{% endif %}
   </p>
-  {% if kasse %}
+  {% if kasse and kasse.error %}
+    <p class="kasse-home"><a href="/kasse">Klubkasse →</a> Klubkassen kan ikke vises lige nu. Kontakt serveradministratoren.</p>
+  {% elif kasse %}
     <p class="kasse-home">
-      <a href="/kasse">Klubkasse →</a> Kassebeholdning {{ fmt(kasse.cash) }} kr{% if kasse.own is not none %} · Din saldo {{ fmt(kasse.own) }} kr{% if kasse.own < 0 %} (du skylder){% elif kasse.own > 0 %} (til gode){% endif %}{% endif %}{% if kasse.alerts %} · <strong>{{ kasse.alerts }} ændrede spilaftener at se på</strong>{% endif %}
+      <a href="/kasse">Klubkasse →</a> Kassebeholdning {{ fmt(kasse.cash) }} kr{% if kasse.own is not none %} · Din saldo {{ fmt(kasse.own) }} kr{% if kasse.own < 0 %} (du skylder){% elif kasse.own > 0 %} (til gode){% endif %}: bogført {{ fmt(kasse.own_posted) }} kr, <span class="muted">afventer {{ fmt(kasse.own_pending) }} kr</span>{% endif %}{% if kasse.alerts %} · <strong>{{ kasse.alerts }} ændrede spilaftener at se på</strong>{% endif %}
     </p>
   {% endif %}
   <section class="card setup-card">
     <h2>
       Ny spilaften
     </h2>
-    <form action="/sessions" method="post" class="setup-form" id="setup-form">
+    <form action="/sessions" method="post" class="setup-form" id="setup-form">{{ csrf_field(request) }}
       <label>Navn på spilaften<input name="title" value="{{default_title}}" required></label>
       <div class="setup-players">
         <strong>Spillere og siddepladser</strong>
@@ -60,7 +62,7 @@
     {% for s in sessions %}
       <p>
         <a href="/sessions/{{s.id}}/live">{{s.title}}</a> · <a href="/sessions/{{s.id}}/export.xlsx">Eksportér Excel</a> ·
-        {% if not member_view and not is_final(s) %}<form action="/sessions/{{s.id}}/delete" method="post" style="display:inline" onsubmit="return confirm('Slet spilaftenen og alle dens resultater permanent?')">
+        {% if not member_view and not is_final(s) %}<form action="/sessions/{{s.id}}/delete" method="post" style="display:inline" onsubmit="return confirm('Slet spilaftenen og alle dens resultater permanent?')">{{ csrf_field(request) }}
           <button type="submit" class="secondary" style="padding:0.2rem 0.5rem">Slet spilaften</button>
         </form>
         {% endif %} · {{s.player_count}} spillere · {{night_time(s)}} · {{'Klub' if s.is_club else 'Uden for statistik'}} · {{'Importeret' if s.origin == 'imported' else 'Live'}}

@@ -18,7 +18,7 @@
   <p id="ai-reasoning-unavailable">Modellens ræsonnement vises kun, hvis API'et returnerer det særskilt. Aktivitetsloggen nedenfor er appens trin.</p>
   <p id="ai-job-error" role="alert" class="error" hidden></p>
   <a id="ai-job-review" href="#" hidden>Gennemgå transskriptionen</a>
-  <form id="ai-job-retry" action="/import/ai" method="post" hidden>
+  <form id="ai-job-retry" action="/import/ai" method="post" hidden>{{ csrf_field(request) }}
     <input type="hidden" name="pending_photos" value="{{ pending_photos }}">
     <button type="submit">Prøv igen med de bevarede fotos</button>
   </form>

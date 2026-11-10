@@ -3,18 +3,24 @@
 Nothing here knows what an entry kind does; each kind's file in this folder says that,
 and balances() only adds the effects up. Entries are never edited or deleted: a mistake is
 undone by a reversing entry, which is the same entry with the amount negated.
+
+A member's saldo has two parts. Bogført: the entries plus what posted nights charged
+(kasse_night_charges, written once by finalize_due and never changed). Afventer: what nights
+that are not posted yet charge right now (aftener.pending_nights). I alt is their sum, so posting
+a night moves its amount from Afventer to Bogført and leaves I alt as it was. Nights are money
+members owe, not cash: posting one never changes the club's cash.
 Every function takes the club id; the routes pass active_club_id().
 """
 
 import json
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from fractions import Fraction
 from zoneinfo import ZoneInfo
 
 from ..database import audit_actor
 from . import aftener
-from .base import Effect
+from .base import UnknownEntryType
 from .registry import get_type
 
 def today():
@@ -37,8 +43,9 @@ def kasserer(db, club_id):
         WHERE c.id=? AND cm.club_id=c.id AND cm.status='active'""", (club_id,)).fetchone()
 
 
-def log(db, club_id, action, entity, entity_id=None, before=None, after=None):
-    username, account_id = audit_actor()
+def log(db, club_id, action, entity, entity_id=None, before=None, after=None, system=False):
+    """One line in the kasserer's log. system: the kasse did it by itself (posting a night), not the viewer."""
+    username, account_id = ("system", None) if system else audit_actor()
     db.execute("""INSERT INTO kasse_log(club_id,actor_username,actor_account_id,action,entity,entity_id,
         before_json,after_json) VALUES (?,?,?,?,?,?,?,?)""",
                (club_id, username, account_id, action, entity, entity_id,
@@ -93,6 +100,11 @@ def log_lines(db, club_id, limit=200):
             text = f"satte kassens start til {start}"
             if "start_cash" in after:
                 text += f" med startbeholdning {_kr(Fraction(*after['start_cash']))}"
+        elif entity == "night":
+            total = sum((Fraction(n, d) for _, _, n, d in after.get("charges", [])), Fraction())
+            when = ("ved overgangen til bogførte aftener" if after.get("source") == "historisk"
+                    else f"{aftener.REOPEN_HOURS} timer efter, den sidst blev afsluttet")
+            text = f"bogførte spilaftenen {after.get('title')} ({after.get('date')}): {_kr(total)} i alt, {when}"
         elif entity == "kasserer":
             text = f"valgte {names.get(after.get('member_id'), 'ingen')} som kasserer"
         elif entity == "alert":
@@ -153,10 +165,12 @@ def _amount(row):
 
 
 def _effect(row):
+    """What one entry does to the books. An entry whose kind no file defines raises UnknownEntryType:
+    counting it as nothing would quietly change balances and the cash."""
     try:
         kind = get_type(row["kind"])
     except KeyError:
-        return Effect()  # an entry type that was removed from the code; shown, but counts nothing
+        raise UnknownEntryType(row["id"], row["kind"]) from None
     return kind.effect(_amount(row), row["member_id"], row["bucket_id"])
 
 
@@ -276,22 +290,40 @@ def drop_inactive_kasserer(db, club_id):
 # Balances ----------------------------------------------------------------
 
 def balances(db, club_id):
-    """Per member: the saldo from nights (settlement and Fejl40), from entries, and in all; plus the club's cash.
+    """Per member: Bogført, Afventer and I alt, plus the club's cash.
 
     A saldo is negative when the member owes the club and positive when the club owes the member,
-    so a night's charge counts negative.
+    so a night's charge counts negative. Per member:
+      nights, fejl40   what posted nights charged (settlement, Fejl40)
+      entries          the entries' effect
+      posted           Bogført = nights + fejl40 + entries
+      pending          Afventer: what nights not posted yet charge now
+      pending_nights   [(night id, title, date, amount)] behind pending, oldest first
+      balance          I alt = posted + pending
+    The club's cash comes from the start cash and the entries only; nights never change it.
     """
     current = club(db, club_id)
     started = bool(current["kasse_started_at"])
     # Only a saved (and so locked) start counts.
     kasse_start, opening = (current["kasse_start"], start_cash(current)) if started else (None, Fraction(0))
-    members = {r["id"]: dict(r, nights=Fraction(), fejl40=Fraction(), entries=Fraction())
+    members = {r["id"]: dict(r, nights=Fraction(), fejl40=Fraction(), entries=Fraction(), pending=Fraction(),
+                             pending_nights=[])
                for r in db.execute("SELECT id,name,status FROM club_members WHERE club_id=? ORDER BY id", (club_id,))}
-    settlement, fejl40 = aftener.charged(db, club_id, kasse_start)
-    for key, part in (("nights", settlement), ("fejl40", fejl40)):
-        for mid, amount in part.items():
-            if mid in members:
-                members[mid][key] -= amount
+    for r in db.execute("""SELECT member_id,part,amount_numerator,amount_denominator FROM kasse_night_charges
+            WHERE club_id=?""", (club_id,)):
+        if r["member_id"] in members:
+            members[r["member_id"]]["nights" if r["part"] == "aften" else "fejl40"] -= Fraction(r[2], r[3])
+    pending = aftener.pending_nights(db, club_id, kasse_start)
+    for night in pending:
+        charged = {}
+        for part in (night["settlement"], night["fejl40"]):
+            for mid, amount in part.items():
+                charged[mid] = charged.get(mid, Fraction()) + amount
+        for mid, amount in charged.items():
+            if mid in members and amount:
+                members[mid]["pending"] -= amount
+                members[mid]["pending_nights"].append(dict(id=night["id"], title=night["title"], date=night["date"],
+                                                           open=night["open"], amount=-amount))
     cash = opening
     for row in _entry_rows(db, club_id):
         effect = _effect(row)
@@ -301,19 +333,110 @@ def balances(db, club_id):
                 members[mid]["entries"] += amount
     rows = []
     for m in members.values():
-        m["balance"] = m["nights"] + m["fejl40"] + m["entries"]
-        if m["status"] == "active" or m["nights"] or m["fejl40"] or m["entries"]:
+        m["posted"] = m["nights"] + m["fejl40"] + m["entries"]
+        m["balance"] = m["posted"] + m["pending"]
+        if m["status"] == "active" or m["nights"] or m["fejl40"] or m["entries"] or m["pending"]:
             rows.append(m)
     return dict(
         members=rows, cash=cash, kasse_start=kasse_start, start_cash=opening, started=started,
+        pending_nights=pending,
         owed_to_club=-sum((m["balance"] for m in rows if m["balance"] < 0), Fraction()),
         owed_by_club=sum((m["balance"] for m in rows if m["balance"] > 0), Fraction()),
     )
 
 
 def member_balance(books, member_id):
-    """One member's saldo from a balances() result."""
+    """One member's saldo (I alt) from a balances() result."""
     return next((m["balance"] for m in books["members"] if m["id"] == member_id), Fraction())
+
+
+def member_row(books, member_id):
+    """One member's row (posted, pending, balance, pending_nights) from a balances() result, or None."""
+    return next((m for m in books["members"] if m["id"] == member_id), None)
+
+
+# Posting nights ------------------------------------------------------------
+#
+# No timers: whether a night is due is worked out from what the database holds (when it was last
+# closed) and the time now, so a restart or a long downtime changes nothing. Posting runs inside
+# the caller's BEGIN IMMEDIATE, and kasse_night_postings.session_id is UNIQUE, so two requests
+# can never post the same night twice.
+
+def _night_rows(db, club_id):
+    return db.execute("""SELECT id,title,created_at,ended_at,origin,saved_at FROM sessions s
+        WHERE club_id=? AND ended_at IS NOT NULL AND collect_club_money=1
+        AND NOT EXISTS (SELECT 1 FROM kasse_night_postings p WHERE p.session_id=s.id) ORDER BY id""",
+                      (club_id,)).fetchall()
+
+
+def due_nights(db, club_id, now=None):
+    """The club's closed nights with Klubkasse whose window has passed and that are not posted yet.
+
+    Nothing is due before Kassens start is saved: until then a night from before the start date may
+    still drop out, so posting it would be wrong.
+    """
+    current = club(db, club_id)
+    if not current or not current["kasse_started_at"]:
+        return []
+    now = now or datetime.now(timezone.utc)
+    due = []
+    for night in _night_rows(db, club_id):
+        final = aftener.final_at(night)
+        if final is not None and final <= now and not aftener.before_start(night, current["kasse_start"]):
+            due.append(night)
+    return due
+
+
+def post_night(db, club_id, night, source="spilaften"):
+    """Post what one closed night charges, once. Returns False if it was posted already.
+
+    The caller holds BEGIN IMMEDIATE. The posting row comes first: if it exists, nothing else is
+    written. Only members of the club are charged, as balances() only counts them.
+    """
+    closed = aftener.closed_at(night)
+    posting = db.execute("""INSERT OR IGNORE INTO kasse_night_postings(club_id,session_id,session_title,night_date,
+        source,closed_at) VALUES (?,?,?,?,?,?)""",
+                         (club_id, night["id"], night["title"], aftener.night_date(night), source,
+                          closed.strftime(aftener.STAMP) if closed else None))
+    if posting.rowcount != 1:
+        return False
+    posting_id = posting.lastrowid
+    members = {r[0] for r in db.execute("SELECT id FROM club_members WHERE club_id=?", (club_id,))}
+    charges = []
+    for part, amounts in zip(("aften", "fejl40"), aftener.night_parts(db, night["id"])):
+        for mid, amount in sorted(amounts.items()):
+            if amount and mid in members:
+                charges.append((posting_id, club_id, mid, part, amount.numerator, amount.denominator))
+    db.executemany("""INSERT INTO kasse_night_charges(posting_id,club_id,member_id,part,amount_numerator,
+        amount_denominator) VALUES (?,?,?,?,?,?)""", charges)
+    log(db, club_id, "post", "night", night["id"], None,
+        dict(title=night["title"], date=aftener.night_date(night), source=source,
+             closed_at=closed.strftime(aftener.STAMP) if closed else None,
+             charges=[[c[2], c[3], c[4], c[5]] for c in charges]), system=True)
+    return True
+
+
+def finalize_due(db, club_id, now=None):
+    """Post every due night of the club; the caller holds BEGIN IMMEDIATE. Returns the posted night ids.
+    Safe to call again and again: a posted night is never due."""
+    return [night["id"] for night in due_nights(db, club_id, now) if post_night(db, club_id, night)]
+
+
+def posted_nights(db, club_id, limit=100):
+    """Posted nights, newest first, with what each charged in all."""
+    return [dict(r, total=_posting_total(db, r["id"]))
+            for r in db.execute("""SELECT id,session_id,deleted_session_id,session_title,night_date,source,closed_at,
+                posted_at FROM kasse_night_postings WHERE club_id=? ORDER BY id DESC LIMIT ?""", (club_id, limit))]
+
+
+def _posting_total(db, posting_id):
+    return sum((Fraction(n, d) for n, d in db.execute(
+        "SELECT amount_numerator,amount_denominator FROM kasse_night_charges WHERE posting_id=?", (posting_id,))),
+        Fraction())
+
+
+def is_posted(db, sid):
+    return db.execute("SELECT 1 FROM kasse_night_postings WHERE session_id=?", (sid,)).fetchone() is not None
 
 
 # Alerts: a night that already counted in the kasse changed --------------------
@@ -418,5 +541,9 @@ def alerts(db, club_id, limit=50):
             old, new = before.get(mid, Fraction()), None if after is None else after.get(mid, Fraction())
             changes.append(dict(member_id=mid, name=names.get(mid, f"#{mid}"), before=old, after=new,
                                 diff=None if new is None else new - old))
-        rows.append(dict(r, kind_label=ALERT_KINDS.get(r["kind"], r["kind"]), changes=changes, pending=after is None))
+        # A posted night's charges stay as posted; the kasserer decides on a korrektion.
+        posted = db.execute("""SELECT 1 FROM kasse_night_postings WHERE club_id=? AND (session_id=? OR deleted_session_id=?)
+            AND posted_at<=?""", (club_id, r["session_id"], r["session_id"], r["created_at"])).fetchone() is not None
+        rows.append(dict(r, kind_label=ALERT_KINDS.get(r["kind"], r["kind"]), changes=changes, pending=after is None,
+                         posted=posted))
     return rows

@@ -30,6 +30,15 @@ def parse_amount(text, signed=False, allow_zero=False):
     return value
 
 
+class UnknownEntryType(Exception):
+    """An entry in the books whose kind no file here defines. Balances cannot be trusted, so they are
+    not shown: an unknown entry never silently counts as nothing."""
+
+    def __init__(self, entry_id, kind):
+        super().__init__(f"kasse entry #{entry_id} has unknown kind {kind!r}")
+        self.entry_id, self.kind = entry_id, kind
+
+
 @dataclass(frozen=True)
 class Effect:
     """What one entry changes: member balances, the club's cash and what was spent from buckets."""

@@ -110,6 +110,28 @@ copy of the database next to it (`data/whist-before-<name>-<time>.sqlite3`):
 docker compose exec whist whistapp migrate drop-night-rule-columns
 ```
 
+### kasse-post-history (Klubkasse: Bogført and Afventer)
+
+Since the Klubkasse splits each saldo into Bogført and Afventer, a night's charges are posted
+12 hours after it was last closed. The app does this by itself for live nights. Imported nights
+saved before this release have no record of when they were saved, so they stay in Afventer
+until you run:
+
+```sh
+docker compose exec whist whistapp migrate kasse-post-history
+```
+
+It posts each such night once, with the amounts the old saldo already counted, so every member's
+I alt stays the same. Nights it cannot classify (fx an unreadable date) are listed, not posted, and
+stay in Afventer. Running it again posts nothing twice.
+
+### Removing a club
+
+There is no club deletion in the app. If a test club is ever removed by hand, its Klubkasse rows
+(`kasse_entries`, `kasse_night_postings`, `kasse_night_charges`, `kasse_buckets`, `kasse_log`,
+`kasse_alerts`) belong to it and must be removed with it, after checking it holds no real money.
+`kasse_entries` and `kasse_night_charges` reference `club_members`, so delete those rows first.
+
 ## Reset the test database
 
 **Destructive:** this removes all game nights, hands, scores, settlements, and

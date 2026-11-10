@@ -1,5 +1,6 @@
 """Local login and cookie-session access control."""
 
+import logging
 import time
 from collections import defaultdict, deque
 from configparser import ConfigParser
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.requests import Request
 
 from .settings import CONFIG, settings
 
@@ -117,6 +119,49 @@ def setup_session(app):
 
 def authenticated(request):
     return request.session.get("user") == "admin" or current_account(request) is not None
+
+
+# CSRF token: a random value kept in the signed login session (new at every login), sent back by
+# every state-changing request, as the form field csrf_token (ordinary forms, rendered by
+# csrf_field() in web.py) or the X-CSRF-Token header (htmx and fetch, set in base.html). It is
+# never put in a URL and never logged. It comes on top of the same-origin check and SameSite.
+CSRF_FIELD = "csrf_token"
+CSRF_HEADER = "x-csrf-token"
+# Logging in has no session to bind a token to yet; logging out only ends the session.
+CSRF_EXEMPT = ("/login", "/logout")
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+FORM_TYPES = ("application/x-www-form-urlencoded", "multipart/form-data")
+
+
+def new_csrf_token(request):
+    request.session["csrf"] = token_urlsafe(32)
+    return request.session["csrf"]
+
+
+def csrf_token(request):
+    """The login session's token, made if the session has none yet (fx a session from before tokens)."""
+    token = request.session.get("csrf")
+    return token if isinstance(token, str) and len(token) >= 32 else new_csrf_token(request)
+
+
+async def verify_csrf(request: Request):
+    """App-wide dependency: a state-changing request must carry the session's token.
+
+    The form is read with request.form(), which Starlette caches on the request, so the route reads
+    the same parsed form afterwards.
+    """
+    from fastapi import HTTPException
+    if request.method in SAFE_METHODS or request.url.path in CSRF_EXEMPT:
+        return
+    expected = request.session.get("csrf")
+    sent = request.headers.get(CSRF_HEADER)
+    if sent is None and request.headers.get("content-type", "").split(";")[0].strip().lower() in FORM_TYPES:
+        value = (await request.form()).get(CSRF_FIELD)
+        sent = value if isinstance(value, str) else None
+    if not isinstance(expected, str) or not sent or not compare_digest(sent, expected):
+        logging.getLogger(__name__).warning("CSRF token %s for %s %s", "missing" if not sent else "invalid",
+                                            request.method, request.url.path)
+        raise HTTPException(403, "Sikkerhedsnøglen mangler eller er forældet. Genindlæs siden, og prøv igen.")
 
 
 def same_origin(request):

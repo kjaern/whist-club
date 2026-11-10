@@ -8,12 +8,12 @@
   <ul>
     <li><strong>Oprette en spilaften</strong> på forsiden: tryk på spillerne for at sætte dem ved bordet, og ret rækkefølgen med pilene (telefon) eller ved at trække i ☰ (computer). Med gæster holdes aftenen uden for klubstatistik og klubkasse.</li>
     <li><strong>Føre en spilaften</strong> under <em>Spiladministration</em>: tilføje hænder, rette eller slette en hånd med <em>Ret</em> i hændernes tabel, tilføje spillere undervejs, ændre bordrækkefølgen (<em>Ændr bordrækkefølge</em>), markere en spiller som gået ved at trykke på <em>Aktiv</em> ved navnet og registrere Fejl40.</li>
-    <li><strong>Afslutte</strong> en spilaften, og <strong>genåbne</strong> den i 12 timer efter, hvis I spiller videre senere samme dag eller skal rette noget. Afregningen gælder, indtil aftenen afsluttes igen. Efter 12 timer er aftenen endelig og kan hverken genåbnes eller slettes.</li>
+    <li><strong>Afslutte</strong> en spilaften, og <strong>genåbne</strong> den i 12 timer efter, hvis I spiller videre senere samme dag eller skal rette noget. Afregningen gælder, indtil aftenen afsluttes igen. Efter 12 timer er aftenen endelig og kan hverken genåbnes eller slettes, og dens betaling bogføres i klubkassen.</li>
     <li><strong>Følge med live</strong>: livevisningen opdaterer sig selv, så den kan stå fremme på en skærm ved bordet.</li>
     <li><strong>Importere en spilaften</strong> fra Excel{% if ai_import_allowed() %} eller fotos af regnskabsarket (AI-import){% endif %} via <a href="/import">Importer spilaften</a>. Aftenen får klubbens nuværende regler; vælg en tidligere version under <em>Brug regler</em>, hvis aftenen blev spillet efter andre regler.</li>
     <li><strong>Se reglerne</strong>: <em>Regler for aftenen</em> på en spilaften viser betaling, Fejl40, meldinger og medlemsliste, som aftenen spilles efter. <a href="/rules">Regelhistorik</a> viser alle klubbens regelversioner, og hvad hver ændrede.</li>
     <li><strong>Se statistik og ændringshistorik</strong>, og eksportere en aften eller et år som Excel.</li>
-    <li><strong>Se <a href="/kasse">Klubkassen</a></strong>: din egen saldo, alle medlemmers saldi, kassebeholdning, puljer, posteringer og kassens log.</li>
+    <li><strong>Se <a href="/kasse">Klubkassen</a></strong>: din egen saldo (bogført, afventer og i alt), alle medlemmers saldi, spilaftener, der afventer eller er bogført, kassebeholdning, puljer, posteringer og kassens log.</li>
     <li><strong>Skifte sin adgangskode</strong> under <a href="/account">Min konto</a>.</li>
   </ul>
 </section>
@@ -45,8 +45,16 @@
   <h2>Klubkasse</h2>
   <p>Alle medlemmer kan se <a href="/kasse">Klubkassen</a>. Kun klubbens <strong>kasserer</strong> kan bogføre i den. Klubben har én kasserer, og klubadministratorerne vælger, hvem det er.</p>
   <ul>
-    <li><strong>Saldo</strong>: negativ betyder, at medlemmet skylder klubben penge; positiv, at medlemmet har penge til gode. Den er summen af kolonnerne <em>Spilaftener</em> (pladsbetaling), <em>Fejl40</em> og <em>Posteringer</em>. Din egen saldo står også på forsiden.</li>
-    <li><strong>Spilaftener tæller</strong>, så snart de er afsluttet med klubkasse. Aftener med gæster, uden klubkasse eller før kassens startdato tæller ikke. Betaler spillerne hinanden direkte (betalingsform efter slutscore), går kun Fejl40 til kassen.</li>
+    <li><strong>Saldo</strong>: negativ betyder, at medlemmet skylder klubben penge; positiv, at medlemmet har penge til gode. Saldoen har tre tal, og din egen står under <em>Min saldo</em> og på forsiden:
+      <ul>
+        <li><strong>Bogført</strong>: posteringer og spilaftener, der ikke kan ændres længere. Kolonnerne <em>Spilaftener</em> (pladsbetaling), <em>Fejl40</em> og <em>Posteringer</em> lægges sammen til Bogført.</li>
+        <li><strong>Afventer</strong> (gråt): spilaftener, der stadig kan ændre sig, dvs. åbne aftener og aftener afsluttet for under 12 timer siden. Tryk på beløbet for at se, hvilke aftener det kommer fra.</li>
+        <li><strong>I alt</strong>: Bogført plus Afventer.</li>
+      </ul>
+    </li>
+    <li><strong>Spilaftener tæller</strong>, så snart der er spillet en hånd: først under Afventer, så beløbet følger aftenen. En åben aften regnes, som om den blev afsluttet med klubkasse nu. 12 timer efter, at aftenen sidst blev afsluttet, kan den ikke genåbnes længere, og så bogføres den af sig selv. Beløbet flytter fra Afventer til Bogført, og I alt ændrer sig ikke. Genåbnes aftenen, starter de 12 timer forfra, når den afsluttes igen. En importeret aften bogføres 12 timer efter, den sidst blev gemt.</li>
+    <li><strong>Hvad tæller ikke</strong>: aftener med gæster, aftener afsluttet uden klubkasse og aftener før kassens startdato. Betaler spillerne hinanden direkte (betalingsform efter slutscore), går kun Fejl40 til kassen. Indtil kassens start er sat, bogføres intet; aftenerne venter under Afventer.</li>
+    <li><strong>Kassebeholdningen</strong> er de penge, klubben faktisk har. Den ændres af posteringer, ikke af spilaftener: en aften er penge, medlemmerne skylder, indtil de betaler dem ind.</li>
     <li><strong>Posteringer</strong>: <em>Indbetaling</em> (et medlem betaler til kassen), <em>Udbetaling</em> (kassen betaler et medlem), <em>Udgift</em> (klubben bruger penge, evt. fra en pulje) og <em>Korrektion</em> (retter et medlems saldo eller kassen; skal have en forklaring).</li>
     <li><strong>En postering kan ikke rettes eller slettes.</strong> En fejl rettes med <em>Tilbagefør</em>, som bogfører det modsatte, eller med en korrektion.</li>
     <li><strong>Puljer</strong> samler udgifter til et formål, fx en tur. Kendes rejsemålet ikke endnu, så giv puljen et neutralt navn som "Udlandstur 2027", og omdøb den bagefter.</li>
@@ -63,7 +71,8 @@
     <li><strong>Klubkasse slået til/fra</strong> på en importeret aften.</li>
   </ul>
   <p>Beskederne står under <em>Ændrede spilaftener</em> på Klubkassen, lige efter Puljer, og kun kassereren og serveradministratoren ser dem. På forsiden ser kassereren, hvor mange der venter. Hver besked viser for hvert medlem betalingen før og efter og forskellen. Kassereren trykker <em>Set</em>, når den er gennemgået; skal noget rettes, sker det med en korrektion.</p>
-  <p class="muted">Første gang en aften afsluttes, kommer der ingen besked; den tæller bare med.</p>
+  <p>Er aftenen ikke bogført endnu, følger Afventer selv med, og beskeden er kun til orientering. Var den allerede bogført (det kan ske for importerede aftener, som altid kan rettes), står det i beskeden: de bogførte beløb ændres aldrig af sig selv, så skal saldoen rettes, bogfører kassereren en korrektion med en forklaring.</p>
+  <p class="muted">Første gang en aften afsluttes, kommer der ingen besked; den tæller bare med under Afventer.</p>
 </section>
 
 <section class="card">

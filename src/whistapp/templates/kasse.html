@@ -17,7 +17,7 @@
       <div><dt>Klubben skylder</dt><dd>{{ fmt(books.owed_by_club) }} kr</dd></div>
     </dl>
     <p class="muted">
-      {% if not books.started %}Kassens start er ikke sat endnu; indtil da tæller alle afsluttede spilaftener med klubkasse.
+      {% if not books.started %}Kassens start er ikke sat endnu; indtil da tæller alle spilaftener med klubkasse, men de afventer og bogføres først, når starten er sat.
       {% elif books.kasse_start %}Kassen startede {{ books.kasse_start }} med startbeholdning {{ fmt(books.start_cash) }} kr; spilaftener fra den dato tæller med.
       {% else %}Kassen startede med {{ fmt(books.start_cash) }} kr, og alle afsluttede spilaftener med klubkasse tæller med.{% endif %}
     </p>
@@ -27,7 +27,7 @@
     <section class="card">
       <h2>Kassens start</h2>
       <form method="post" action="/kasse/start" class="kasse-form"
-            onsubmit="return confirm('Kassens start kan ikke ændres, når den er gemt. Senere fejl rettes med korrektioner. Gem?')">
+            onsubmit="return confirm('Kassens start kan ikke ændres, når den er gemt. Senere fejl rettes med korrektioner. Gem?')">{{ csrf_field(request) }}
         <label>Spilaftener fra<input type="date" name="kasse_start"></label>
         <label>Startbeholdning (kr)<input name="start_cash" inputmode="decimal" placeholder="0"></label>
         <button type="submit">Gem og lås start</button>
@@ -36,24 +36,74 @@
     </section>
   {% endif %}
 
+  {% if own %}
+    <section class="card kasse-own-balance">
+      <h2>Min saldo</h2>
+      <table class="kasse-balance">
+        <tr><th scope="row">Bogført</th><td>{{ fmt(own.posted) }} kr</td></tr>
+        <tr class="muted"><th scope="row">Afventer</th><td>{{ fmt(own.pending) }} kr</td></tr>
+        <tr><th scope="row">I alt</th><td><strong>{{ fmt(own.balance) }} kr</strong></td></tr>
+      </table>
+      {% if own.pending_nights %}
+        <p class="muted">Afventer kommer fra:
+          {% for n in own.pending_nights %}<a href="/sessions/{{ n.id }}">{{ n.title }} ({{ n.date }})</a> {{ fmt(n.amount) }} kr{% if n.open %} (åben){% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+        </p>
+      {% endif %}
+    </section>
+  {% endif %}
+
   <section class="card">
     <div class="stats-section-heading">
       <h2>Medlemmer</h2>
       <button type="button" class="secondary kasse-rule" data-key="aftener" aria-haspopup="dialog">Vis regel</button>
     </div>
+    <p class="muted">Bogført er posteringer og afsluttede spilaftener, der ikke kan genåbnes længere. Afventer er spilaftener, der stadig kan ændre sig: åbne aftener og aftener afsluttet for under {{ reopen_hours }} timer siden. Afventer bogføres af sig selv {{ reopen_hours }} timer efter, aftenen sidst blev afsluttet; I alt ændrer sig ikke af det.</p>
     <div class="stat-scroll">
       <table>
-        <thead><tr><th>Medlem</th><th>Spilaftener</th><th>Fejl40</th><th>Posteringer</th><th>Saldo</th></tr></thead>
+        <thead><tr><th>Medlem</th><th>Spilaftener</th><th>Fejl40</th><th>Posteringer</th><th>Bogført</th><th>Afventer</th><th>I alt</th></tr></thead>
         <tbody>
           {% for m in books.members %}
             <tr{% if m.id == own_id %} class="kasse-own"{% endif %}>
               <td>{{ m.name }}{% if m.status != 'active' %} <span class="muted">(inaktiv)</span>{% endif %}</td>
-              <td>{{ fmt(m.nights) }}</td><td>{{ fmt(m.fejl40) }}</td><td>{{ fmt(m.entries) }}</td><td><strong>{{ fmt(m.balance) }}</strong></td>
+              <td>{{ fmt(m.nights) }}</td><td>{{ fmt(m.fejl40) }}</td><td>{{ fmt(m.entries) }}</td><td>{{ fmt(m.posted) }}</td>
+              <td class="muted">{% if m.pending_nights %}<details><summary>{{ fmt(m.pending) }}</summary>{% for n in m.pending_nights %}<a href="/sessions/{{ n.id }}">{{ n.title }}</a> {{ fmt(n.amount) }}<br>{% endfor %}</details>{% else %}{{ fmt(m.pending) }}{% endif %}</td>
+              <td><strong>{{ fmt(m.balance) }}</strong></td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>Spilaftener i kassen</h2>
+    {% if books.pending_nights %}
+      <details{% if books.pending_nights|length <= 10 %} open{% endif %}><summary>Afventer ({{ books.pending_nights|length }})</summary>
+      <ul>
+        {% for n in books.pending_nights %}
+          <li><a href="/sessions/{{ n.id }}">{{ n.title }}</a> ({{ n.date }}):
+            {% if n.error %}beløbet kan ikke beregnes lige nu og tæller ikke med endnu.
+            {% elif n.open %}åben; beløbene følger aftenen og forudsætter, at den afsluttes med klubkasse.
+            {% elif not books.started %}bogføres, når kassens start er sat.
+            {% elif n.final_at %}bogføres {{ local_time(n.final_at.strftime('%Y-%m-%d %H:%M:%S'))[:16] }}.
+            {% else %}afsluttet før appen huskede, hvornår importen blev gemt; bogføres, når serveradministratoren har gennemgået den (whistapp migrate kasse-post-history).{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      </details>
+    {% else %}
+      <p class="muted">Ingen spilaftener afventer.</p>
+    {% endif %}
+    {% if posted_nights %}
+      <details><summary>Bogførte spilaftener ({{ posted_nights|length }}{% if posted_nights|length == 100 %}, de nyeste{% endif %})</summary>
+        <ul>
+          {% for p in posted_nights %}
+            <li>{% if p.session_id %}<a href="/sessions/{{ p.session_id }}">{{ p.session_title }}</a>{% else %}{{ p.session_title }} <span class="muted">(slettet)</span>{% endif %}
+              ({{ p.night_date }}): {{ fmt(p.total) }} kr, bogført {{ local_time(p.posted_at)[:16] }}{% if p.source == 'historisk' %} ved overgangen{% endif %}</li>
+          {% endfor %}
+        </ul>
+      </details>
+    {% endif %}
   </section>
 
   {% if is_kasserer %}
@@ -62,7 +112,7 @@
         <h2>Ny postering</h2>
         <button type="button" class="secondary kasse-rule" id="kasse-kind-rule" data-key="{{ entry_types[0].key }}" aria-haspopup="dialog">Vis regel</button>
       </div>
-      <form method="post" action="/kasse/entries" class="kasse-form" id="kasse-entry-form">
+      <form method="post" action="/kasse/entries" class="kasse-form" id="kasse-entry-form">{{ csrf_field(request) }}
         <label>Type
           <select name="kind" id="kasse-kind">
             {% for t in entry_types %}<option value="{{ t.key }}" data-target="{{ t.target }}" {% if form.get('kind') == t.key %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
@@ -92,7 +142,7 @@
   {% if is_kasserer %}
     <section class="card">
       <h2>Ny pulje</h2>
-      <form method="post" action="/kasse/buckets" class="kasse-form">
+      <form method="post" action="/kasse/buckets" class="kasse-form">{{ csrf_field(request) }}
         <label>Navn<input name="name" required maxlength="80" placeholder="Udlandstur 2027"></label>
         <label>Note<input name="note" maxlength="500"></label>
         <button type="submit">Opret pulje</button>
@@ -109,7 +159,7 @@
         {% if b.note %}<span class="muted"> · {{ b.note }}</span>{% endif %}
         {% if is_kasserer %}
           <details><summary>Ret pulje</summary>
-            <form method="post" action="/kasse/buckets/{{ b.id }}" class="kasse-form">
+            <form method="post" action="/kasse/buckets/{{ b.id }}" class="kasse-form">{{ csrf_field(request) }}
               <label>Navn<input name="name" value="{{ b.name }}" required maxlength="80"></label>
               <label>Note<input name="note" value="{{ b.note }}" maxlength="500"></label>
               <button type="submit">Gem pulje</button>
@@ -130,6 +180,7 @@
         <div class="kasse-alert{% if not alert.seen_at %} unseen{% endif %}">
           <strong>{{ alert.kind_label }}</strong> · {{ alert.session_title }} · {{ local_time(alert.created_at) }} · {{ alert.actor_username }}
           {% if alert.pending %}<p class="muted">Aftenen er genåbnet; de nye beløb kendes, når den afsluttes igen.</p>{% endif %}
+          {% if alert.posted %}<p><strong>Aftenen var allerede bogført.</strong> Ændringen rører ikke de bogførte beløb; skal saldoen rettes, så bogfør en korrektion med en forklaring.</p>{% endif %}
           {% if alert.changes %}
             <table>
               <tr><th>Medlem</th><th>Betaling før</th><th>Betaling efter</th><th>Forskel</th></tr>
@@ -139,7 +190,7 @@
             </table>
           {% endif %}
           {% if is_kasserer and not alert.seen_at %}
-            <form method="post" action="/kasse/alerts/{{ alert.id }}/seen"><button type="submit" class="secondary">Set</button></form>
+            <form method="post" action="/kasse/alerts/{{ alert.id }}/seen">{{ csrf_field(request) }}<button type="submit" class="secondary">Set</button></form>
           {% elif alert.seen_at %}<p class="muted">Set af {{ alert.seen_by }} {{ local_time(alert.seen_at) }}</p>{% endif %}
         </div>
       {% endfor %}
@@ -162,7 +213,7 @@
               <td>{{ e.member_name or e.bucket_name or ('Klubkassen' if e.kind == 'korrektion' else '') }}</td>
               <td>{{ fmt(e.amount) }}</td><td>{{ e.note }}</td>
               {% if is_kasserer %}<td>{% if not e.reversed and not e.reverses_id %}
-                <form method="post" action="/kasse/entries/{{ e.id }}/reverse" onsubmit="return confirm('Tilbagefør postering #{{ e.id }}?')"><button type="submit" class="secondary">Tilbagefør</button></form>
+                <form method="post" action="/kasse/entries/{{ e.id }}/reverse" onsubmit="return confirm('Tilbagefør postering #{{ e.id }}?')">{{ csrf_field(request) }}<button type="submit" class="secondary">Tilbagefør</button></form>
               {% endif %}</td>{% endif %}
             </tr>
           {% else %}

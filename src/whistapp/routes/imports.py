@@ -127,8 +127,9 @@ def _set_import_money(db, sid, enabled):
             [(sid, *entry) for entry in entries],
         )
 
+    # Every save of an imported night passes here; the kasse posts it REOPEN_HOURS after saved_at.
     db.execute(
-        "UPDATE sessions SET collect_club_money=? WHERE id=?", (int(enabled), sid)
+        "UPDATE sessions SET collect_club_money=?,saved_at=CURRENT_TIMESTAMP WHERE id=?", (int(enabled), sid)
     )
 
 

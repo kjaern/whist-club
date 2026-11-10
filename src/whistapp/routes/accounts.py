@@ -7,6 +7,7 @@ from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
 from ..auth import (
+    new_csrf_token,
     authenticated,
     current_account,
     hash_password,
@@ -39,6 +40,7 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         request.session.clear()
         request.session["account_id"] = account["id"]
         request.session["account_version"] = account["session_version"]
+        new_csrf_token(request)
         return RedirectResponse("/account" if account["must_change_password"] else "/", status_code=303)
     if not verify_login(username, password, client):
         return render(
@@ -46,6 +48,7 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
         )
     request.session.clear()
     request.session["user"] = "admin"
+    new_csrf_token(request)
     return RedirectResponse("/", status_code=303)
 
 

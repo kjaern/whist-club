@@ -24,6 +24,8 @@ from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
 from ..database import connect
 from ..kasse import ledger as kasse
+from ..kasse.base import UnknownEntryType
+from .kasse import finalize_nights
 from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rule_versions import is_club_night, latest_version, night_rules, stamp_night
 from .rules import version_name
@@ -61,6 +63,8 @@ def home(request: Request):
         account = current_account(request)
         if account and account["must_change_password"]:
             return RedirectResponse("/account", status_code=303)
+    finalize_nights(active_club_id())  # the kasse summary below shows balances
+    if not is_server_admin(request):
         with connect() as db:
             sessions = db.execute("SELECT sessions.*, (SELECT COUNT(*) FROM players WHERE players.session_id=sessions.id) AS player_count FROM sessions WHERE club_id=? ORDER BY sessions.id DESC", (active_club_id(),)).fetchall()
         with connect() as db:
@@ -90,12 +94,19 @@ def home(request: Request):
 
 
 def _kasse_summary(db, request):
-    """The club's cash, the member's own balance and, for the kasserer, unseen alerts; shown on Spilaftener."""
+    """The club's cash, the member's own Bogført, Afventer and I alt and, for the kasserer, unseen
+    alerts; shown on Spilaftener."""
     member = linked_member(request)
     found = kasse.kasserer(db, active_club_id())
-    books = kasse.balances(db, active_club_id())
+    try:
+        books = kasse.balances(db, active_club_id())
+    except UnknownEntryType as exc:
+        logging.getLogger(__name__).error("Kasse refused to add up the books: %s", exc)
+        return dict(error=True)
+    row = kasse.member_row(books, member["id"]) if member else None
     return dict(cash=books["cash"],
-                own=kasse.member_balance(books, member["id"]) if member else None,
+                own=row["balance"] if row else (Fraction() if member else None),
+                own_posted=row["posted"] if row else Fraction(), own_pending=row["pending"] if row else Fraction(),
                 alerts=kasse.unseen_alerts(db, active_club_id()) if member and found and found["id"] == member["id"] else 0)
 
 

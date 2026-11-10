@@ -573,3 +573,4 @@ header{padding-inline:clamp(12px,1.8vw,30px)}
 .kasse-log-line{margin:.3rem 0}
 .kasse-summary .muted{margin:.6rem 0 0}
 .kasserer-choice{display:inline-flex;align-items:center;gap:.3rem;white-space:nowrap}
+.kasse-balance th{text-align:left;font-weight:600;padding-right:1.5rem}.kasse-balance td{text-align:right}

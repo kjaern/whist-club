@@ -51,14 +51,14 @@
 </div>
 <section class="import-tab-panel" data-panel="excel" {% if active_tab == 'ai' %}hidden{% endif %}>
 <div class="card">
-<form action="/import/preview" method="post" enctype="multipart/form-data">
+<form action="/import/preview" method="post" enctype="multipart/form-data">{{ csrf_field(request) }}
   <label>Excel eller ZIP<input type="file" name="workbook" accept=".xlsx,.zip" required></label>
   <button type="submit">Gennemse import</button>
 </form>
 </div>
 <div class="card">
 <h2>Importér JSON (uden AI)</h2>
-<form action="/import/json/preview" method="post" enctype="multipart/form-data">
+<form action="/import/json/preview" method="post" enctype="multipart/form-data">{{ csrf_field(request) }}
 <label>Transskription (.json)<input type="file" name="transcription_json" accept=".json,application/json" required></label>
 <button type="submit">Gennemgå JSON</button>
 </form>
@@ -66,7 +66,7 @@
 <div class="card">
 <h2>Kun slutresultater</h2>
 <p>Hvis hånddata ikke kan rekonstrueres, gemmes kun slutresultaterne. Der oprettes ingen opdigtede hænder eller meldinger.</p>
-<form action="/import/final" method="post">
+<form action="/import/final" method="post">{{ csrf_field(request) }}
 <label>Spilaftenens navn (valgfrit)<input name="title"></label>
 <label>Præcision<select name="date_precision"><option value="minute">Minut</option><option value="day" selected>Dag</option><option value="month">Måned</option><option value="year">År</option><option value="unknown">Ukendt</option></select></label>
 <label>Dato / tidspunkt<input name="game_date" placeholder="2026-07-17 / 2026-07 / 2026"></label>
@@ -91,7 +91,7 @@
 <div class="card">
 <h2>AI-fotoimport</h2>
 <p>Upload fotos af scorearkene. AI transskriberer dem til en Excel-fil, som derefter gennemgås og valideres som en almindelig import. Fotos vedhæftes spilaftenen, hvis importen gemmes.</p>
-<form action="/import/ai" method="post" enctype="multipart/form-data">
+<form action="/import/ai" method="post" enctype="multipart/form-data">{{ csrf_field(request) }}
 <label>Fotos af scoreark<input id="ai-photo-input" type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
 <button type="button" id="ai-add-photos" class="secondary">+ Tilføj flere fotos</button>
 <span id="ai-photo-count" class="muted" aria-live="polite"></span>
@@ -129,7 +129,7 @@
 <div style="display:flex;gap:.5rem;flex-wrap:wrap">
 {% for photo in staged_photo_names %}<a href="/import/staged/{{pending_photos}}/{{photo}}" target="_blank"><img src="/import/staged/{{pending_photos}}/{{photo}}" alt="Originalt scoreark" style="max-height:170px;max-width:120px;object-fit:contain"></a>{% endfor %}
 </div>
-<form action="/import/ai" method="post"><input type="hidden" name="pending_photos" value="{{pending_photos}}"><button type="submit">Prøv igen med de bevarede fotos</button></form>
+<form action="/import/ai" method="post">{{ csrf_field(request) }}<input type="hidden" name="pending_photos" value="{{pending_photos}}"><button type="submit">Prøv igen med de bevarede fotos</button></form>
 </div>
 {% endif %}
 {% if ai_artifacts %}
@@ -161,7 +161,7 @@
 {{ workbook_viewer(source_workbooks) }}
 {% if source_workbooks %}<script>document.querySelectorAll(".open-source-excel").forEach(button => button.addEventListener("click", () => document.getElementById("source-excel-dialog").showModal())); document.getElementById("close-source-excel").addEventListener("click", () => document.getElementById("source-excel-dialog").close());</script>{% endif %}
 {% else %}
-<form action="/import/commit" method="post">
+<form action="/import/commit" method="post">{{ csrf_field(request) }}
 <input type="hidden" name="data" value="{{data|tojson|forceescape}}">
 {% if ai_artifacts or data.pending_photos or source_files or source_workbooks %}
 <section class="card">
@@ -505,7 +505,7 @@ input[readonly] { background:#293943; color:#e8eff3; opacity:1; cursor:default; 
     message.textContent = 'Kontrollerer…';
     try {
       const response = await fetch('/import/check-hand', {
-        method: 'POST', headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken()},
         body: JSON.stringify({players, hand:handData(row)})
       });
       if (!response.ok) throw new Error('Serverfejl (' + response.status + ')');
@@ -784,7 +784,7 @@ input[readonly] { background:#293943; color:#e8eff3; opacity:1; cursor:default; 
     };
     try {
       const response = await fetch(`/import/current/${draftId}/save`, {
-        method: 'POST', headers: {'Content-Type':'application/json'},
+        method: 'POST', headers: {'Content-Type':'application/json', 'X-CSRF-Token': csrfToken()},
         body: JSON.stringify(payload)
       });
       if (!response.ok) throw new Error('Kunne ikke gemme');

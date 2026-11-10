@@ -4,7 +4,7 @@
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
 {% if saved %}<p role="status">Adgangskoden er ændret.</p>{% endif %}
 <section class="card"><h2>Skift adgangskode</h2>
-<form method="post" action="/account/password">
+<form method="post" action="/account/password">{{ csrf_field(request) }}
 <label>Nuværende adgangskode<input type="password" name="current_password" autocomplete="current-password" required></label>
 <label>Ny adgangskode (mindst 8 tegn)<input type="password" name="new_password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
 <label>Gentag ny adgangskode<input type="password" name="confirm_password" minlength="8" maxlength="256" autocomplete="new-password" required></label>

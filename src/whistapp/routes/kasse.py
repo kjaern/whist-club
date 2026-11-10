@@ -1,5 +1,7 @@
 """Klubkasse: every member reads it; only the club's kasserer writes to it."""
 
+import logging
+import sqlite3
 from fractions import Fraction
 from html import escape
 
@@ -10,7 +12,7 @@ from ..auth import is_server_admin
 from ..club import active_club_id
 from ..database import connect
 from ..kasse import ledger
-from ..kasse.base import parse_amount
+from ..kasse.base import UnknownEntryType, parse_amount
 from ..kasse.registry import ENTRY_TYPES, RULE_TITLES, rule_sources
 from ..web import can_manage_club, linked_member, local_time, render
 
@@ -23,22 +25,59 @@ def is_kasserer(request, db):
     return bool(member and found and member["id"] == found["id"])
 
 
+UNKNOWN_ENTRY = ("Klubkassen kan ikke vises: den indeholder en postering af en type, appen ikke kender, "
+                 "så saldi og kassebeholdning ville blive forkerte. Kontakt serveradministratoren.")
+
+
+def finalize_nights(club_id):
+    """Post the club's due nights before its balances are shown (see ledger.finalize_due).
+
+    Called when a page that shows balances is read. The request has already passed the login and
+    club checks; it posts nothing it chose itself, only what the database says is due, in its own
+    BEGIN IMMEDIATE transaction. If posting fails the page still shows the right I alt, because a
+    night that is not posted counts in Afventer.
+    """
+    if club_id is None:
+        return
+    try:
+        with connect() as db:
+            if not ledger.due_nights(db, club_id):
+                return
+        with connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            ledger.finalize_due(db, club_id)
+    except sqlite3.Error:
+        logging.getLogger(__name__).exception("Kasse could not post due nights for club %s", club_id)
+
+
+def unknown_entry_response(exc):
+    logging.getLogger(__name__).error("Kasse refused to add up the books: %s", exc)
+    return HTMLResponse(f"<p>{escape(UNKNOWN_ENTRY)}</p>", status_code=500)
+
+
 def _page(request, db, error=None, status_code=200, form=None):
     club_id = active_club_id()
     writer = is_kasserer(request, db)
     insider = writer or is_server_admin(request)  # sees the alerts
     member = linked_member(request)
     kasserer = ledger.kasserer(db, club_id)
+    try:
+        books, buckets = ledger.balances(db, club_id), ledger.buckets(db, club_id)
+    except UnknownEntryType as exc:
+        return unknown_entry_response(exc)
+    own_id = member["id"] if member else None
     response = render(
         request, "kasse.html",
-        books=ledger.balances(db, club_id),
+        books=books,
+        own=ledger.member_row(books, own_id) if own_id else None,
+        posted_nights=ledger.posted_nights(db, club_id),
         entries=ledger.entries(db, club_id),
-        buckets=ledger.buckets(db, club_id),
+        buckets=buckets,
         alerts=ledger.alerts(db, club_id) if insider else [],
         log=ledger.log_lines(db, club_id),  # every member reads the log
         entry_types=list(ENTRY_TYPES.values()), rule_titles=RULE_TITLES,
         kasserer=kasserer, is_kasserer=writer, insider=insider,
-        own_id=member["id"] if member else None,
+        own_id=own_id, reopen_hours=ledger.aftener.REOPEN_HOURS,
         active_members=db.execute("SELECT id,name FROM club_members WHERE club_id=? AND status='active' ORDER BY name",
                                   (club_id,)).fetchall(),
         today=ledger.today(), error=error, form=form or {},
@@ -50,6 +89,7 @@ def _page(request, db, error=None, status_code=200, form=None):
 
 @router.get("/kasse", response_class=HTMLResponse)
 def kasse_page(request: Request):
+    finalize_nights(active_club_id())
     with connect() as db:
         return _page(request, db)
 

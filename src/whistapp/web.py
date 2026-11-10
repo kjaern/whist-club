@@ -13,7 +13,9 @@ from fastapi import HTTPException
 from fastapi.templating import Jinja2Templates
 from whistapp.bids.registry import registered_bids
 
-from .auth import current_account, is_server_admin
+from markupsafe import Markup, escape
+
+from .auth import CSRF_FIELD, csrf_token, current_account, is_server_admin
 from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
@@ -140,6 +142,14 @@ def member_operation_allowed(path, method):
 
 
 templates = Jinja2Templates(directory=ROOT / "templates")
+
+
+def csrf_field(request):
+    """Hidden field with the login session's CSRF token; every POST form renders it (see auth.verify_csrf)."""
+    return Markup(f'<input type="hidden" name="{CSRF_FIELD}" value="{escape(csrf_token(request))}">')
+
+
+templates.env.globals.update(csrf_field=csrf_field, csrf_token=csrf_token)
 
 
 templates.env.globals["app_version"] = application_version()

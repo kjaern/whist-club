@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from .auth import authenticated, current_account, is_server_admin, same_origin, setup_session
+from .auth import authenticated, current_account, is_server_admin, same_origin, setup_session, verify_csrf
 from .club import active_club_id, active_club_reset, active_club_set
 from .database import (
     audit_actor_reset,
@@ -31,7 +31,8 @@ async def lifespan(_app):
     yield
 
 
-app = FastAPI(title="Whist", lifespan=lifespan)
+# Every route: a state-changing request must carry the session's CSRF token (auth.verify_csrf).
+app = FastAPI(title="Whist", lifespan=lifespan, dependencies=[Depends(verify_csrf)])
 
 
 @app.middleware("http")

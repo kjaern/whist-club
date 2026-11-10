@@ -6,7 +6,7 @@
   {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
   {% if saved %}<p role="status">Ændringerne er gemt.</p>{% endif %}
 
-  <form method="post" action="/club/save">
+  <form method="post" action="/club/save">{{ csrf_field(request) }}
     <section class="card">
       <h2>Klub</h2>
       <label>Klubnavn
@@ -168,24 +168,24 @@
   </form>
 
   {% for member in members %}
-    <form id="role-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/role">
+    <form id="role-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/role">{{ csrf_field(request) }}
       <input type="hidden" name="is_club_admin" value="{{ 0 if member.is_club_admin else 1 }}">
     </form>
     {% if can_manage_club(request) and member.status == 'active' %}
       {# An unticked box sends no member_id, which clears the kasserer. #}
-      <form id="kasserer-{{ member.id }}" method="post" action="/club/kasserer"></form>
+      <form id="kasserer-{{ member.id }}" method="post" action="/club/kasserer">{{ csrf_field(request) }}</form>
     {% endif %}
   {% endfor %}
   {# Standalone forms: never nest forms inside the main member-edit form. #}
   {% for member in members %}
     {% if member_logins.get(member.id) %}
       {% if member_logins[member.id].must_change_password %}
-        <form id="reset-invitation-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/invitation/reset"></form>
+        <form id="reset-invitation-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/invitation/reset">{{ csrf_field(request) }}</form>
       {% endif %}
     {% else %}
-      <form id="create-login-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/login"></form>
+      <form id="create-login-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/login">{{ csrf_field(request) }}</form>
       {% if unlinked_accounts %}
-        <form id="link-login-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/link"></form>
+        <form id="link-login-{{ member.id }}" method="post" action="/club/members/{{ member.id }}/link">{{ csrf_field(request) }}</form>
       {% endif %}
     {% endif %}
   {% endfor %}

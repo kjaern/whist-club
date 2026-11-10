@@ -65,7 +65,7 @@
   <a class="button secondary" href="/sessions/{{session.id}}/rules">Regler for aftenen</a>
   <a class="button secondary" href="/sessions/{{session.id}}/history">Ændringshistorik</a>
   {% if not session.ended_at %}
-    <form method="post" action="/sessions/{{session.id}}/end" onsubmit="return confirm('Afslut spilaftenen? Den bliver låst for ændringer.')">
+    <form method="post" action="/sessions/{{session.id}}/end" onsubmit="return confirm('Afslut spilaftenen? Den bliver låst for ændringer.')">{{ csrf_field(request) }}
       <input type="hidden" name="night_state" value="{{ night_state }}">
       {% if session.is_club %}
         <label><input type="checkbox" name="collect_club_money" value="true" checked> Medregn betaling til klubkassen</label>
@@ -77,7 +77,7 @@
   {% else %}
     <strong>✓ Afsluttet {{night_time(session, 'ended_at')}}</strong>
     {% if can_reopen(session) %}
-      <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen? Den nuværende afregning gælder, indtil du afslutter igen.')">
+      <form method="post" action="/sessions/{{session.id}}/reopen" onsubmit="return confirm('Genåbn spilaftenen? Den nuværende afregning gælder, indtil du afslutter igen.')">{{ csrf_field(request) }}
         <input type="hidden" name="night_state" value="{{ night_state }}">
         <button type="submit" class="secondary">Genåbn</button>
       </form>

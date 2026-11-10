@@ -24,7 +24,7 @@
   {% endif %}
   {% if session.origin == 'imported' %}
   <section class="card"><h2>Historisk import</h2>
-    <form method="post" action="/sessions/{{session.id}}/money">
+    <form method="post" action="/sessions/{{session.id}}/money">{{ csrf_field(request) }}
       <label><input type="checkbox" name="collect_club_money" value="1" {% if session.collect_club_money %}checked{% endif %} {% if not session.is_club %}disabled{% endif %}> Medregn i pengestatistik</label>
       <button type="submit">Gem</button>
     </form>
@@ -33,14 +33,14 @@
   {# Photos matter for imported nights; on a live night they are an extra, so they go last. #}
   {% set photos_card %}
   <section class="card"><h2>Originalark</h2>
-    <form method="post" action="/sessions/{{session.id}}/photos" enctype="multipart/form-data">
+    <form method="post" action="/sessions/{{session.id}}/photos" enctype="multipart/form-data">{{ csrf_field(request) }}
       <label>Tilføj fotos <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
       <button type="submit">Upload fotos</button>
     </form>
     {% if photos %}<div style="display:flex;gap:.5rem;flex-wrap:wrap">
       {% for photo in photos %}<div>
         <a href="/sessions/{{session.id}}/photos/{{photo.id}}" target="_blank"><img src="/sessions/{{session.id}}/photos/{{photo.id}}" alt="{{photo.original_name}}" loading="lazy" style="max-width:130px;max-height:180px;object-fit:contain"></a>
-        <form method="post" action="/sessions/{{session.id}}/photos/{{photo.id}}/delete"><button type="submit">Fjern</button></form>
+        <form method="post" action="/sessions/{{session.id}}/photos/{{photo.id}}/delete">{{ csrf_field(request) }}<button type="submit">Fjern</button></form>
       </div>{% endfor %}
     </div>{% endif %}
   </section>

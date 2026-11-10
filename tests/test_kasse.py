@@ -2,6 +2,7 @@
 
 import itertools
 import json
+from datetime import datetime, timedelta, timezone
 from fractions import Fraction
 
 import pytest
@@ -16,7 +17,8 @@ from test_clubs import _activate, _new_login
 
 
 def _wipe_kasse(db, club_id):
-    for table in ("kasse_entries", "kasse_buckets", "kasse_log", "kasse_alerts"):
+    for table in ("kasse_night_charges", "kasse_night_postings", "kasse_entries", "kasse_buckets", "kasse_log",
+                  "kasse_alerts"):
         db.execute(f"DELETE FROM {table} WHERE club_id=?", (club_id,))
     db.execute("""UPDATE clubs SET kasserer_member_id=NULL,kasse_start=NULL,kasse_start_cash_numerator=0,
         kasse_start_cash_denominator=1,kasse_started_at=NULL WHERE id=?""", (club_id,))
@@ -113,7 +115,13 @@ def test_balances_add_nights_and_entries(club):
         assert _balance(db, club_id, dorte) == -Fraction(231, 2)
         books = ledger.balances(db, club_id)
         row = next(m for m in books["members"] if m["id"] == bent)
-        assert (row["nights"], row["fejl40"], row["entries"]) == (-25, -40, 50)
+        # Closed just now: the night afventer; the entry is bogført.
+        assert (row["nights"], row["fejl40"], row["entries"], row["pending"]) == (0, 0, 50, -65)
+        ledger.set_start(db, club_id, "", Fraction(0))
+        assert ledger.finalize_due(db, club_id, now=datetime.now(timezone.utc) + timedelta(hours=13))
+        books = ledger.balances(db, club_id)
+        row = next(m for m in books["members"] if m["id"] == bent)
+        assert (row["nights"], row["fejl40"], row["entries"], row["pending"]) == (-25, -40, 50, 0)
         assert books["owed_to_club"] == 15 + 70 + Fraction(231, 2) and books["owed_by_club"] == 0
         assert books["cash"] == 50 + 3 - 20
         assert ledger.buckets(db, club_id)[0]["spent"] == 20

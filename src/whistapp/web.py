@@ -20,7 +20,7 @@ from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
 from .finance import MONEY_MODES
-from .rule_versions import night_rules
+from .rule_versions import REOPEN_HOURS, night_rules
 from .rules import bid_short_names, enabled_bid_keys, load_rules
 from .vision_import import admin_llm_settings
 
@@ -283,9 +283,8 @@ templates.env.filters["local_time"] = local_time
 templates.env.globals["night_time"] = night_time
 
 
-# A closed live night can be reopened, or deleted, for this long. After that it is final:
-# its results and settlement never change, so the club's money can rely on them.
-REOPEN_HOURS = 12
+# REOPEN_HOURS (imported above from rule_versions, and re-exported here): a closed live night
+# can be reopened, or deleted, for this long; after that it is final.
 
 
 def reopen_until(session):

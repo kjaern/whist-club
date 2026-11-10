@@ -117,12 +117,17 @@ def test_balances_add_nights_and_entries(club):
         row = next(m for m in books["members"] if m["id"] == bent)
         # Closed just now: the night afventer; the entry is bogført.
         assert (row["nights"], row["fejl40"], row["entries"], row["pending"]) == (0, 0, 50, -65)
+        # owed_to_club/owed_by_club are Bogført only; the unposted night is pending_owed_to_club.
+        assert (books["owed_to_club"], books["owed_by_club"]) == (0, 50 + 5)
+        assert books["pending_owed_to_club"] == 65 + 75 + Fraction(231, 2)
         ledger.set_start(db, club_id, "", Fraction(0))
         assert ledger.finalize_due(db, club_id, now=datetime.now(timezone.utc) + timedelta(hours=13))
         books = ledger.balances(db, club_id)
         row = next(m for m in books["members"] if m["id"] == bent)
         assert (row["nights"], row["fejl40"], row["entries"], row["pending"]) == (-25, -40, 50, 0)
+        # Posted now, so what members owe is Bogført and nothing afventer.
         assert books["owed_to_club"] == 15 + 70 + Fraction(231, 2) and books["owed_by_club"] == 0
+        assert books["pending_owed_to_club"] == 0
         assert books["cash"] == 50 + 3 - 20
         assert ledger.buckets(db, club_id)[0]["spent"] == 20
         assert all(isinstance(m["balance"], Fraction) for m in books["members"])
@@ -402,5 +407,7 @@ def test_switching_off_klubkasse_on_an_imported_night_alerts(admin_in):
     assert admin.post(f"/sessions/{sid}/money", data={}, follow_redirects=False).status_code == 303
     with connect() as db:
         alerts = ledger.alerts(db, club_id)
-        assert ledger.balances(db, club_id)["owed_to_club"] == 0
+        # owed_to_club is Bogført only (the night was never posted); Afventer must drop it too.
+        books = ledger.balances(db, club_id)
+        assert books["owed_to_club"] == 0 and books["pending_owed_to_club"] == 0
     assert [a["kind"] for a in alerts] == ["money"] and _change(alerts[0], members[2]) == (75, 0)

@@ -68,7 +68,8 @@
     <form method="post" action="/sessions/{{session.id}}/end" onsubmit="return confirm('Afslut spilaftenen? Den bliver låst for ændringer.')">{{ csrf_field(request) }}
       <input type="hidden" name="night_state" value="{{ night_state }}">
       {% if session.is_club %}
-        <label><input type="checkbox" name="collect_club_money" value="true" checked> Medregn betaling til klubkassen</label>
+        {# A night reopened after closing without Klubkasse keeps that choice, as the kasse's Afventer does. #}
+        <label><input type="checkbox" name="collect_club_money" value="true" {% if session.collect_club_money != 0 %}checked{% endif %}> Medregn betaling til klubkassen</label>
       {% else %}
         <span class="muted">Uden for statistik {{ info('Gæster deltager', 'Når gæster spiller med, tæller aftenen ikke i klubstatistik eller klubkasse.') }}</span>
       {% endif %}

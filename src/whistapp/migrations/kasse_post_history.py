@@ -44,7 +44,8 @@ def _plan(db):
     lines is a night a person must look at; a club whose kasse has not started is only waiting)."""
     todo, review, stuck = [], [], False
     for c in db.execute("SELECT id,name,kasse_start,kasse_started_at FROM clubs ORDER BY id").fetchall():
-        nights = [n for n in aftener.unposted_nights(db, c["id"], closed_only=True) if not aftener.before_start(n, c["kasse_start"])]
+        nights = [n for n in aftener.unposted_nights(db, c["id"], closed_only=True, kasse_start=c["kasse_start"])
+                  if not aftener.before_start(n, c["kasse_start"])]
         if not c["kasse_started_at"]:
             if nights:
                 review.append(f"{c['name']}: kassens start er ikke sat; {len(nights)} aftener afventer, til den er sat")

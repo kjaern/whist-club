@@ -306,6 +306,8 @@ def balances(db, club_id):
       pending_nights   [(night id, title, date, amount)] behind pending, oldest first
       balance          I alt = posted + pending
     The club's cash comes from the start cash and the entries only; nights never change it.
+    owed_to_club / owed_by_club add up the members' Bogført (what is owed now);
+    pending_owed_to_club adds up what Afventer charges on top, which can still change.
     """
     current = club(db, club_id)
     started = bool(current["kasse_started_at"])
@@ -345,8 +347,11 @@ def balances(db, club_id):
     return dict(
         members=rows, cash=cash, kasse_start=kasse_start, start_cash=opening, started=started,
         pending_nights=pending,
-        owed_to_club=-sum((m["balance"] for m in rows if m["balance"] < 0), Fraction()),
-        owed_by_club=sum((m["balance"] for m in rows if m["balance"] > 0), Fraction()),
+        # What members owe the club, and the club them, now: from Bogført only.
+        owed_to_club=-sum((m["posted"] for m in rows if m["posted"] < 0), Fraction()),
+        owed_by_club=sum((m["posted"] for m in rows if m["posted"] > 0), Fraction()),
+        # What nights not posted yet add (Afventer), shown apart: it can still change.
+        pending_owed_to_club=-sum((m["pending"] for m in rows if m["pending"] < 0), Fraction()),
     )
 
 
@@ -378,7 +383,7 @@ def due_nights(db, club_id, now=None):
         return []
     now = now or datetime.now(timezone.utc)
     due = []
-    for night in aftener.unposted_nights(db, club_id, closed_only=True):
+    for night in aftener.unposted_nights(db, club_id, closed_only=True, kasse_start=current["kasse_start"]):
         final = aftener.final_at(night)
         if final is not None and final <= now and not aftener.before_start(night, current["kasse_start"]):
             due.append(night)

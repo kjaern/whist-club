@@ -5,8 +5,9 @@ placering) plus its Fejl40 penalties. In the money mode where players settle wit
 the settlement does not go to the kasse; Fejl40 always does. Only nights on or after the kasse's
 start date count.
 
-Afventer: an open (or reopened) club night charges what it would if it were closed now with
-Klubkasse ticked, as the close form does by default. A closed night with Klubkasse chosen
+Afventer: an open club night charges what it would if it were closed now with Klubkasse ticked,
+as the close form does by default; a night reopened after it was closed without Klubkasse
+(collect_club_money 0, which reopening keeps) charges nothing, as it did while closed. A closed night with Klubkasse chosen
 (collect_club_money) charges its stored settlement.
 Bogført: REOPEN_HOURS after a night was last closed it can no longer be reopened, and
 ledger.finalize_due() posts what it charges, once. Reopening clears the closing time, so an old
@@ -21,8 +22,7 @@ from fractions import Fraction
 from zoneinfo import ZoneInfo
 
 from ..finance import settlement_entries
-from ..rule_versions import is_club_night, night_rules
-from ..web import REOPEN_HOURS
+from ..rule_versions import REOPEN_HOURS, is_club_night, night_rules
 
 DANISH_TIME = ZoneInfo("Europe/Copenhagen")
 STAMP = "%Y-%m-%d %H:%M:%S"  # SQLite CURRENT_TIMESTAMP, UTC
@@ -52,10 +52,15 @@ def night_parts(db, sid):
     return settlement, _fejl40(db, sid)
 
 
-def open_night_parts(db, sid):
-    """({member_id: settlement}, {member_id: Fejl40}) an open night would charge if it were closed
-    now with Klubkasse, the close form's default. Empty for a night without hands or with guests.
+def open_night_parts(db, night):
+    """({member_id: settlement}, {member_id: Fejl40}) an open night (a row from unposted_nights)
+    would charge if it were closed now with Klubkasse, the close form's default. Empty for a night
+    without hands or with guests, and for a night reopened after it was closed without Klubkasse
+    (collect_club_money 0): that explicit no stands, and the close form keeps it unticked.
     Read only: the calculation closing uses, and nothing is stored."""
+    sid = night["id"]
+    if night["collect_club_money"] == 0:
+        return {}, {}
     if not db.execute("SELECT 1 FROM hands WHERE session_id=?", (sid,)).fetchone() or not is_club_night(db, sid):
         return {}, {}
     rules = night_rules(db, sid)
@@ -107,14 +112,22 @@ NIGHT_ERRORS = (ValueError, KeyError, TypeError, ZeroDivisionError, IndexError)
 STALE_OPEN_HOURS = 24
 
 
-def unposted_nights(db, club_id, closed_only=False):
+def unposted_nights(db, club_id, closed_only=False, kasse_start=None):
     """The club's nights the kasse has not posted, oldest first: closed nights with Klubkasse and,
-    unless closed_only, open nights. The one place that says which nights may still be posted."""
+    unless closed_only, open nights. The one place that says which nights may still be posted.
+
+    kasse_start: leave out in SQL the nights clearly before it, so nights that can never count are
+    not loaded on every page. Coarse on purpose, and callers still check before_start: a live
+    night's created_at is UTC and its Danish date (night_date) can be a day later, so the cut is a
+    day early. An unreadable created_at (fx 'ukendt') compares greater than a date and is kept."""
     which = "ended_at IS NOT NULL AND collect_club_money=1" if closed_only else "(ended_at IS NULL OR collect_club_money=1)"
-    return db.execute(f"""SELECT id,title,created_at,ended_at,origin,saved_at FROM sessions s
-        WHERE club_id=? AND {which}
+    since, args = "", [club_id]
+    if kasse_start:
+        since, args = "AND created_at >= date(?,'-1 day')", args + [kasse_start]
+    return db.execute(f"""SELECT id,title,created_at,ended_at,origin,saved_at,collect_club_money FROM sessions s
+        WHERE club_id=? AND {which} {since}
         AND NOT EXISTS (SELECT 1 FROM kasse_night_postings p WHERE p.session_id=s.id) ORDER BY id""",
-                      (club_id,)).fetchall()
+                      args).fetchall()
 
 
 def _started_at(night):
@@ -136,12 +149,12 @@ def pending_nights(db, club_id, kasse_start, now=None):
     """
     now = now or datetime.now(timezone.utc)
     result = []
-    for night in unposted_nights(db, club_id):
+    for night in unposted_nights(db, club_id, kasse_start=kasse_start):
         if before_start(night, kasse_start):
             continue
         error = False
         try:
-            parts = night_parts(db, night["id"]) if night["ended_at"] else open_night_parts(db, night["id"])
+            parts = night_parts(db, night["id"]) if night["ended_at"] else open_night_parts(db, night)
         except NIGHT_ERRORS:
             logging.getLogger(__name__).warning("Kasse cannot work out what night %s charges", night["id"], exc_info=True)
             parts, error = ({}, {}), True

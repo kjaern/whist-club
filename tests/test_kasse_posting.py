@@ -528,3 +528,79 @@ def test_posting_belongs_to_one_club(club):
         assert ledger.finalize_due(db, club_id) == [sid]
         assert db.execute("SELECT club_id FROM kasse_night_charges WHERE posting_id=(SELECT id FROM kasse_night_postings "
                           "WHERE session_id=?) GROUP BY club_id", (sid,)).fetchall()[0][0] == club_id
+
+
+# Second review ---------------------------------------------------------------------------
+
+def test_a_night_reopened_after_closing_without_klubkasse_adds_nothing_to_afventer(admin_in):
+    admin, club_id, members = admin_in
+    with connect() as db:
+        _started(db, club_id)
+        without = _open_night(db, club_id, members, title="Uden klubkasse")
+    # Closed without Klubkasse (the box unticked), then reopened: the explicit no still stands.
+    assert admin.post(f"/sessions/{without}/end", data={}, follow_redirects=False).status_code == 303
+    assert admin.post(f"/sessions/{without}/reopen", follow_redirects=False).status_code == 303
+    with connect() as db:
+        assert db.execute("SELECT ended_at,collect_club_money FROM sessions WHERE id=?", (without,)).fetchone()[:] == (None, 0)
+        assert _parts(db, club_id, members[3]) == (0, 0, 0)
+        assert ledger.balances(db, club_id)["pending_nights"] == []
+        with_kasse = _open_night(db, club_id, members, title="Med klubkasse")
+    # A reopened night that was closed with Klubkasse still counts as if closed with it.
+    assert admin.post(f"/sessions/{with_kasse}/end", data={"collect_club_money": "true"}, follow_redirects=False).status_code == 303
+    assert admin.post(f"/sessions/{with_kasse}/reopen", follow_redirects=False).status_code == 303
+    with connect() as db:
+        assert _parts(db, club_id, members[3]) == (0, -115, -115)
+        assert [n["id"] for n in ledger.balances(db, club_id)["pending_nights"]] == [with_kasse]
+    # The close form keeps the earlier choice, as Afventer does: unticked only after an explicit no.
+    box = re.compile(r'<input type="checkbox" name="collect_club_money" value="true"\s*(checked)?>')
+    assert box.search(admin.get(f"/sessions/{without}").text).group(1) is None
+    assert box.search(admin.get(f"/sessions/{with_kasse}").text).group(1) == "checked"
+    with connect() as db:
+        fresh = _open_night(db, club_id, members, title="Ny aften")
+    assert box.search(admin.get(f"/sessions/{fresh}").text).group(1) == "checked"
+
+
+def test_what_members_owe_is_bogfoert_and_afventer_is_shown_apart(admin_in):
+    admin, club_id, members = admin_in
+    with connect() as db:
+        _started(db, club_id)
+        posted = _closed_night(db, club_id, members, [0, 25, 75, 115])
+        _ended_hours_ago(db, posted, 13)
+        assert ledger.finalize_due(db, club_id) == [posted]
+        ledger.add_entry(db, club_id, "indbetaling", Fraction(30), member_id=members[0])
+        _open_night(db, club_id, members)  # charges 0, 25, 75 and 115 more, still Afventer
+        books = ledger.balances(db, club_id)
+        assert books["owed_to_club"] == 25 + 75 + 115 and books["owed_by_club"] == 30
+        assert books["pending_owed_to_club"] == 25 + 75 + 115
+        assert all(isinstance(books[k], Fraction) for k in ("owed_to_club", "owed_by_club", "pending_owed_to_club"))
+    page = admin.get("/kasse").text
+    assert "Medlemmer skylder og Klubben skylder er bogførte beløb." in page
+    assert "Afventer: medlemmerne skylder yderligere 215 kr" in page
+
+
+def test_the_kasse_loads_without_the_web_layer():
+    import subprocess
+    import sys
+    code = "import sys, whistapp.kasse.aftener, whistapp.kasse.ledger; print('whistapp.web' in sys.modules)"
+    out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
+    assert out.stdout.strip() == "False"
+
+
+def test_nights_clearly_before_the_kasse_start_are_not_loaded(club):
+    from whistapp.kasse import aftener
+    club_id, members = club
+    with connect() as db:
+        early = _closed_night(db, club_id, members, [0, 25, 75, 115], created="2025-12-30 18:00:00")
+        # 23:30 UTC on 31 December is 00:30 on 1 January in Denmark: the night counts.
+        late = _closed_night(db, club_id, members, [0, 25, 75, 115], created="2025-12-31 23:30:00")
+        before = _closed_night(db, club_id, members, [0, 25, 75, 115], created="2025-12-31 20:00:00")
+        unknown = _closed_night(db, club_id, members, [0, 0, 0, 7], origin="imported", created="ukendt")
+        ids = [n["id"] for n in aftener.unposted_nights(db, club_id, closed_only=True, kasse_start="2026-01-01")]
+        assert early not in ids and {late, before, unknown} <= set(ids)
+        assert {early, late, before, unknown} <= {n["id"] for n in aftener.unposted_nights(db, club_id, closed_only=True)}
+        ledger.set_start(db, club_id, "2026-01-01", Fraction(0))
+        # The exact check still drops 20:00 UTC on 31 December (21:00 in Denmark).
+        assert [n["id"] for n in ledger.balances(db, club_id)["pending_nights"]] == [late, unknown]
+        for sid in (early, late, before):
+            _ended_hours_ago(db, sid, 13)
+        assert ledger.finalize_due(db, club_id) == [late]

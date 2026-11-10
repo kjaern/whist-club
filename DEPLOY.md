@@ -72,6 +72,15 @@ docker compose logs --tail=100 whist
 The running tunnel does not need rebuilding for ordinary application changes.
 To start it on a fresh deployment, use `--profile tunnel` as above.
 
+### First update with CSRF tokens
+
+From this release every change needs the login session's security token, which pages opened
+before the update do not have. Update when no night is being played, or tell players to reload
+every open page afterwards. A change sent from an old page is refused with "Sikkerhedsnøglen
+mangler eller er forældet. Genindlæs siden, og prøv igen." and nothing is saved: reload the page
+and enter it again (fx the hand that was being typed). Logging in again also gives a new token,
+after which other open tabs in the same browser need a reload too.
+
 ## Stamping nights created before version tracking
 
 Each night records the server version and commit that created it, shown on the

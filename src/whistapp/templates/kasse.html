@@ -16,6 +16,7 @@
       <div><dt>Medlemmer skylder</dt><dd>{{ fmt(books.owed_to_club) }} kr</dd></div>
       <div><dt>Klubben skylder</dt><dd>{{ fmt(books.owed_by_club) }} kr</dd></div>
     </dl>
+    <p class="muted">Medlemmer skylder og Klubben skylder er bogførte beløb.{% if books.pending_owed_to_club %} Afventer: medlemmerne skylder yderligere {{ fmt(books.pending_owed_to_club) }} kr for spilaftener, der ikke er bogført endnu.{% endif %}</p>
     <p class="muted">
       {% if not books.started %}Kassens start er ikke sat endnu; indtil da tæller alle spilaftener med klubkasse, men de afventer og bogføres først, når starten er sat.
       {% elif books.kasse_start %}Kassen startede {{ books.kasse_start }} med startbeholdning {{ fmt(books.start_cash) }} kr; spilaftener fra den dato tæller med.

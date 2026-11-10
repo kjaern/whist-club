@@ -11,6 +11,11 @@ carry over to every night. Each night points to its version through
 
 import json
 
+# A closed live night can be reopened, or deleted, for this long. After that it is final:
+# its results and settlement never change, so the club's money can rely on them. It lives here,
+# not in web.py, so the kasse can read it without loading the web layer.
+REOPEN_HOURS = 12
+
 RULE_FIELDS = ("placements", "fejl40", "money_mode", "point_rate", "bid_settings")
 
 

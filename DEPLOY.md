@@ -55,6 +55,12 @@ docker compose --profile tunnel up -d --build
 docker compose --profile tunnel ps
 ```
 
+Cloudflare passes the visitor's address in `X-Forwarded-For`. `compose.yaml` sets
+`FORWARDED_ALLOW_IPS` so the app believes that header when the request comes from a
+private (Docker) network address, which is how the login rate limit counts failed
+logins per visitor instead of for everybody together. Do not set it to `*`: the
+header's first address is whatever the visitor sent.
+
 The application is not reachable through a published Pi port. For local
 development on a PC, use `whistapp serve --host 0.0.0.0` instead.
 

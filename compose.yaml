@@ -7,6 +7,10 @@ services:
     environment:
       # Log/OS clock in Danish time; the app converts stored UTC itself and does not depend on this.
       TZ: Europe/Copenhagen
+      # Every request arrives from the tunnel container, so uvicorn takes the visitor's address from
+      # X-Forwarded-For when the sender is on a private (Docker) network. The login rate limit counts
+      # per visitor with this; without it, it counts everybody as one.
+      FORWARDED_ALLOW_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
       WHIST_LLM_BASE_URL: ${WHIST_LLM_BASE_URL:-}
       WHIST_LLM_MODEL: ${WHIST_LLM_MODEL:-}
       WHIST_LLM_API_KEY: ${WHIST_LLM_API_KEY:-}

@@ -597,3 +597,6 @@ header > a:first-child { flex-shrink: 0; }
 .header-info a { font-size: inherit; font-weight: 700; color: #72d7b4; text-decoration: underline; }
 .nav-menu { flex-shrink: 0; }
 @media (max-width: 700px) { header { flex-wrap: wrap; row-gap: 8px; } .header-info { order: 3; flex-basis: 100%; } .header-info:empty { display: none; } }
+
+/* Serveradministration → Backup */
+.backup-list th,.backup-list td{text-align:left;padding:.25rem 1rem .25rem 0;white-space:nowrap}

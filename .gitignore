@@ -177,6 +177,7 @@ cython_debug/
 
 data
 config
+backups
 
 # Claude Code: local launch configs and personal settings
 .claude/

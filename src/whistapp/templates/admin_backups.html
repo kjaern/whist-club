@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h1>Serveradministration</h1>
+  <p><a href="/admin/accounts">Konti</a> · <a href="/admin/ai">AI-fotoimport</a> · <strong>Backup</strong></p>
+  <p class="muted">En backup er hele databasen: alle klubber, aftener, konti og adgangskode-hashes. Opbevar den sikkert.</p>
+
+  <section class="card">
+    <h2>Lav backup</h2>
+    {% if notice %}<p role="status">Backup gemt: {{ notice }}</p>{% endif %}
+    {% if error %}<p role="alert" class="error">{{ error }}</p>{% endif %}
+    <p>Backups gemmes i <code>{{ folder }}</code>. Der laves automatisk en backup hver måned.</p>
+    <form method="post" action="/admin/backups">{{ csrf_field(request) }}
+      <button type="submit">Lav backup nu</button>
+    </form>
+    <p style="margin-top:.75rem"><a class="button secondary" href="/admin/backups/download">Hent databasen nu</a></p>
+    <p class="muted">"Hent databasen nu" henter en frisk kopi uden at gemme den i backupmappen.</p>
+  </section>
+
+  <section class="card">
+    <h2>Backups</h2>
+    {% if backups %}
+      <div class="table-scroll"><table class="backup-list">
+        <thead><tr><th>Tidspunkt</th><th>Type</th><th>Størrelse</th><th>Fil</th></tr></thead>
+        <tbody>
+        {% for b in backups %}
+          <tr><td>{{ b.modified_text }}</td><td>{{ b.kind }}</td><td>{{ b.size_text }}</td>
+            <td><a href="/admin/backups/{{ b.name }}" download>{{ b.name }}</a></td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    {% else %}
+      <p>Ingen backups endnu.</p>
+    {% endif %}
+  </section>
+{% endblock %}

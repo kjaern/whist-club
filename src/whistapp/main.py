@@ -1,4 +1,5 @@
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -7,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from .auth import (
     CSRF_MESSAGE, CsrfError, authenticated, current_account, is_server_admin, same_origin, setup_session, verify_csrf,
 )
+from .backups import monthly_loop
 from .club import active_club_id, active_club_reset, active_club_set
 from .database import (
     audit_actor_reset,
@@ -24,13 +26,19 @@ from .web import (
     resolve_active_club,
     ROOT,
 )
-from .routes import accounts, admin_ai, clubs, guide, kasse, sessions, club, imports, rules
+from .routes import accounts, admin_ai, admin_backups, clubs, guide, kasse, sessions, club, imports, rules
 
 
 @asynccontextmanager
 async def lifespan(_app):
     init_db()
-    yield
+    # The month's database backup; the loop checks again every hour.
+    backups = asyncio.create_task(monthly_loop())
+    try:
+        yield
+    finally:
+        backups.cancel()
+        with suppress(asyncio.CancelledError): await backups
 
 
 # Every route: a state-changing request must carry the session's CSRF token (auth.verify_csrf).
@@ -110,6 +118,7 @@ setup_session(app)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
 app.include_router(accounts.router)
 app.include_router(admin_ai.router)
+app.include_router(admin_backups.router)
 app.include_router(clubs.router)
 app.include_router(guide.router)
 app.include_router(rules.router)

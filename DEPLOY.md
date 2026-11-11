@@ -167,6 +167,45 @@ If the app fails with `attempt to write a readonly database` or
 `unable to open database file`, check the directory owner and the effective
 container UID/GID before changing permissions.
 
+## Database backups in the app
+
+**Serveradministration → Backup** (`/admin/backups`) makes a backup of the
+database on demand, lists the backups, and downloads either a listed backup or
+a fresh copy of the live database. A monthly backup
+(`whist-monthly-YYYY-MM.sqlite3`) is made automatically: the server checks at
+startup and every hour, so a month whose backup is missing gets one as soon as
+the server runs. Backups use SQLite's online backup, so they are safe while the
+server runs, and the app never deletes or rewrites one; remove old ones by hand.
+
+Backups go in their own bind mount, `/var/lib/whist/backups`, which defaults to
+`./backups` next to `compose.yaml`. To keep them on an external disk, set the
+host path in `.env`:
+
+```sh
+WHIST_BACKUP_PATH=/mnt/external/whist-backups
+```
+
+Create the folder and give it to the container's UID/GID before starting:
+
+```sh
+mkdir -p /mnt/external/whist-backups
+sudo chown 10001:10001 /mnt/external/whist-backups
+sudo chmod 750 /mnt/external/whist-backups
+docker compose up -d whist
+```
+
+A disk formatted as exFAT or NTFS has no Unix owners, so `chown` does nothing
+there; mount it with `uid=10001,gid=10001` instead (for example in
+`/etc/fstab`). Make sure the disk is mounted before Docker starts, or the
+backups land on the SD card under the empty mount point. If the folder is not
+writable, the backup page shows the error. Outside Docker the folder is
+`WHIST_BACKUP_DIR` (a relative path is inside `WHIST_HOME`), or `backups/` in
+`WHIST_HOME`. Two backups made in the same second get `-2`, `-3` ... added to the
+name.
+
+A backup contains every club, night, login and password hash. It does not
+contain `config/` (`secrets.ini`) or `data/llm.ini`; back those up separately.
+
 ## Backups before real games
 
 Once the database contains real games, stop using the reset procedure.

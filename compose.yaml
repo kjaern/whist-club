@@ -17,6 +17,8 @@ services:
     volumes:
       - ./config:/var/lib/whist/config
       - ./data:/var/lib/whist/data:rw
+      # Database backups (Serveradministration → Backup); point WHIST_BACKUP_PATH in .env at e.g. an external disk.
+      - ${WHIST_BACKUP_PATH:-./backups}:/var/lib/whist/backups:rw
     networks:
       - whist_private
     security_opt:

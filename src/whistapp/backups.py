@@ -3,7 +3,8 @@
 The folder is WHIST_BACKUP_DIR (relative to the Whist home), or `backups/` in the home.
 In Docker it is a separate bind mount, so it can live on another disk. Backups are only
 ever added here: the app never rewrites or deletes one. A monthly backup is made
-automatically (`ensure_monthly`, checked at startup and every hour while the server runs).
+automatically (`ensure_monthly`, checked at startup and every hour while the server runs), and
+`whistapp migrate` makes one before it changes anything (`before_migration`).
 """
 
 import asyncio
@@ -25,8 +26,8 @@ from .web import DISPLAY_TZ
 log = logging.getLogger("uvicorn.error")
 
 CHECK_SECONDS = 3600
-KIND_LABELS = {"manual": "Manuel", "monthly": "Månedlig"}
-NAME = re.compile(r"^whist-(manual|monthly)-([0-9]{4}-[0-9]{2}(?:-[0-9]{2}-[0-9]{6}(?:-[0-9]+)?)?)\.sqlite3$")
+KIND_LABELS = {"manual": "Manuel", "monthly": "Månedlig", "migration": "Før migrering"}
+NAME = re.compile(r"^whist-(manual|monthly|migration)-([0-9]{4}-[0-9]{2}(?:-[0-9]{2}-[0-9]{6}(?:-[0-9]+)?)?)\.sqlite3$")
 PARTIAL_PREFIX = ".whist-partial-"
 DOWNLOAD_PREFIX = "whist-download-"
 STALE_DOWNLOAD_SECONDS = 3600
@@ -78,16 +79,18 @@ def _free_name(folder, stem):
     return name
 
 
-def _write(stem, unique=True):
+def _write(stem, unique=True, clean=True):
     """Write a backup into the folder; a half-written file never gets a backup's name.
 
-    unique: pick a free name rather than skipping when `stem` exists; an existing backup is never replaced."""
+    unique: pick a free name rather than skipping when `stem` exists; an existing backup is never replaced.
+    clean: remove half-written files left by a stopped server; only the server's own process may."""
     folder = backup_dir()
     with _writing:
         try:
             folder.mkdir(parents=True, exist_ok=True)
             # Left by a server stopped mid-copy; with the lock held no copy is running now.
-            for stale in folder.glob(f"{PARTIAL_PREFIX}*"): stale.unlink(missing_ok=True)
+            if clean:
+                for stale in folder.glob(f"{PARTIAL_PREFIX}*"): stale.unlink(missing_ok=True)
             if unique: name = _free_name(folder, stem)
             elif (folder / f"{stem}.sqlite3").exists(): return None
             else: name = f"{stem}.sqlite3"
@@ -105,6 +108,12 @@ def _write(stem, unique=True):
 def create_backup(now=None):
     """A manual backup, named after the moment it was made."""
     return _write(f"whist-manual-{(now or _now()):%Y-%m-%d-%H%M%S}")
+
+
+def before_migration(now=None):
+    """The backup `whistapp migrate` makes just before a migration changes the database. It runs in
+    a process of its own next to the server, so it leaves the server's half-written files alone."""
+    return _write(f"whist-migration-{(now or _now()):%Y-%m-%d-%H%M%S}", clean=False)
 
 
 def ensure_monthly(now=None):

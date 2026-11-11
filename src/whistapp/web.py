@@ -390,18 +390,27 @@ def hand_round(db, sid, participants):
     last = db.execute("SELECT dealer_id,round_no,round_end FROM hands WHERE session_id=? ORDER BY id DESC LIMIT 1", (sid,)).fetchone()
     count = db.execute("SELECT COUNT(*) FROM hands WHERE session_id=?", (sid,)).fetchone()[0]
     dealer = hand_dealer(players, next_dealer(players, last[0] if last else None, count), participants)
-    if not last or last[1] is None:
-        round_no, dealt = 1, set()
-    elif last[2]:
-        round_no, dealt = last[1] + 1, set()
-    else:
-        round_no = last[1]
+    dealt = set()
+    if last and last[1] is not None and not last[2]:
         dealt = {r[0] for r in db.execute(
-            "SELECT dealer_id FROM hands WHERE session_id=? AND round_no=?", (sid, round_no))}
+            "SELECT dealer_id FROM hands WHERE session_id=? AND round_no=?", (sid, last[1]))}
+    return (dealer, *next_round(last[1:] if last else None, dealt, ids, dealer))
+
+
+def next_round(last, dealt, table, dealer):
+    """(round no, round end) of a hand dealt by `dealer` with `table` the ids of the players at
+    the table. `last` is the previous hand's (round no, round end), or None for the first hand;
+    `dealt` holds who has dealt in that round."""
+    if not last or last[0] is None:
+        round_no, dealt = 1, set()
+    elif last[1]:
+        round_no, dealt = last[0] + 1, set()
+    else:
+        round_no = last[0]
         # Whoever had still to deal has left the table: that round is over, a new one starts.
-        if ids <= dealt:
+        if table <= dealt:
             round_no, dealt = round_no + 1, set()
-    return dealer, round_no, int(ids <= dealt | {dealer})
+    return round_no, int(table <= dealt | {dealer})
 
 
 def view_data(db, sid):

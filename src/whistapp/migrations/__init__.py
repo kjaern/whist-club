@@ -4,19 +4,18 @@
 version on a brand-new database). Anything that rewrites or removes existing data lives
 here instead: no route, no game logic and not `init_db()` imports this package. Each
 migration says whether it is needed, refuses to run while its preconditions are not met,
-backs the database up next to itself first, and runs in one transaction.
+backs the database up first (a "Før migrering" backup in the backup folder, see `backups.py`),
+and runs in one transaction; if the backup cannot be written, nothing is changed.
 
 A migration module has NAME, DESCRIPTION, `needed(db) -> bool`, `blockers(db) -> list[str]`
 and `run(db) -> str`.
 """
 
-import sqlite3
-from datetime import datetime
+from .. import backups
+from ..database import connect
+from . import backfill_dealers, drop_night_rule_columns, kasse_post_history
 
-from ..database import connect, db_path
-from . import drop_night_rule_columns, kasse_post_history
-
-MIGRATIONS = [drop_night_rule_columns, kasse_post_history]
+MIGRATIONS = [drop_night_rule_columns, kasse_post_history, backfill_dealers]
 
 
 def status():
@@ -34,19 +33,6 @@ def status():
     return "\n".join(lines)
 
 
-def _backup(name):
-    """A full copy of the database next to it, made with SQLite's online backup."""
-    source = db_path()
-    target = source.with_name(f"{source.stem}-before-{name}-{datetime.now():%Y%m%d-%H%M%S}{source.suffix}")
-    src, dst = sqlite3.connect(source), sqlite3.connect(target)
-    try:
-        src.backup(dst)
-    finally:
-        dst.close()
-        src.close()
-    return target
-
-
 def run(name):
     migration = next((m for m in MIGRATIONS if m.NAME == name), None)
     if migration is None:
@@ -56,7 +42,10 @@ def run(name):
             return f"{name}: already done, nothing changed"
         if problems := migration.blockers(db):
             raise SystemExit(f"{name}: not run, fix this first:\n  " + "\n  ".join(problems))
-    backup = _backup(name)
+    try:
+        backup = backups.before_migration()
+    except backups.BackupError as exc:
+        raise SystemExit(f"{name}: not run, the backup failed: {exc}") from exc
     with connect() as db:
         db.execute("BEGIN IMMEDIATE")
         result = migration.run(db)

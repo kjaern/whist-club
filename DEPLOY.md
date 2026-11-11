@@ -112,8 +112,9 @@ them and their state:
 docker compose exec whist whistapp migrate
 ```
 
-Run one by name. It refuses if its preconditions are not met, and it first saves a
-copy of the database next to it (`data/whist-before-<name>-<time>.sqlite3`):
+Run one by name. It refuses if its preconditions are not met, and it first makes a
+backup in the backup folder (`whist-migration-<time>.sqlite3`, listed as "Før migrering"
+under Serveradministration → Backup). If that backup cannot be written, nothing is changed:
 
 ```sh
 docker compose exec whist whistapp migrate drop-night-rule-columns
@@ -134,6 +135,18 @@ It posts each such night once, with the amounts the old saldo already counted, s
 I alt stays the same. Nights it cannot classify or work out (fx an unreadable date or no rule
 version) are listed, not posted, and stay in Afventer; while such a night is left, the migration
 shows as needed and lists it again on every run. Running it again posts nothing twice.
+
+### backfill-dealers (Giver and rounds on early nights)
+
+Live nights saved before 7 Nov 2026 have no dealer, so they show no Giver and no round lines.
+This fills them in with the rotation the app showed then (the first seat deals the first hand):
+
+```sh
+docker compose exec whist whistapp migrate backfill-dealers
+```
+
+Imported nights are left alone, and so are nights where only some hands lack a dealer; those
+are listed. Running it again changes nothing.
 
 ### Removing a club
 

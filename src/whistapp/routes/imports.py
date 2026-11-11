@@ -20,7 +20,7 @@ from whistapp.bids.registry import registered_bids
 
 from ..buildinfo import build_stamp
 from ..club import active_club_id, club_settings
-from ..database import connect
+from ..database import audit_actor, connect
 from ..kasse import ledger as kasse
 from ..finance import settlement_entries
 from ..rule_versions import club_versions, is_club_night, night_rules, stamp_night
@@ -1574,7 +1574,7 @@ async def import_commit(request: Request):
             db.executemany(
                 "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
                 [
-                    (sid, str(request.session.get("user", "admin")), description)
+                    (sid, audit_actor()[0], description)
                     for description in change_descriptions
                 ],
             )

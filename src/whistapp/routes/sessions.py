@@ -22,7 +22,7 @@ from .imports import _photo_list, _session_source_view, PHOTO_ROOT, SOURCE_ROOT
 from ..auth import current_account, is_server_admin
 from ..club import active_club_id, club_players, club_settings
 from ..buildinfo import build_stamp
-from ..database import connect
+from ..database import audit_actor, connect
 from ..kasse import ledger as kasse
 from ..finance import export_workbook, export_year_workbook, settlement_entries
 from ..rule_versions import is_club_night, latest_version, night_rules, stamp_night
@@ -963,7 +963,7 @@ def reopen_night(request: Request, sid: int, night_state: str = Form("")):
             kasse.add_alert(db, sid, "reopen", before, None)
         db.execute(
             "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
-            (sid, request.session.get("user", "admin"),
+            (sid, audit_actor()[0],
              "Genåbnet; afregningen gælder, indtil aftenen afsluttes igen"),
         )
     return RedirectResponse(f"/sessions/{sid}", status_code=303)
@@ -999,7 +999,7 @@ def end_night(request: Request, sid: int, collect_club_money: bool = Form(False)
             if change:
                 db.execute(
                     "INSERT INTO evening_log(evening_id,user_id,description) VALUES (?,?,?)",
-                    (sid, request.session.get("user", "admin"), f"Afsluttet; {change}"),
+                    (sid, audit_actor()[0], f"Afsluttet; {change}"),
                 )
     except (ValueError, TypeError, KeyError) as exc:
         logging.getLogger(__name__).warning("Cannot close session %s: %s", sid, exc)

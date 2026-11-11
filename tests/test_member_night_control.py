@@ -37,6 +37,10 @@ def test_ordinary_member_can_close_and_reopen_a_night():
             assert f"/sessions/{sid}/reopen" in member.get(f"/sessions/{sid}").text
             reopened = member.post(f"/sessions/{sid}/reopen", follow_redirects=False)
             assert reopened.status_code == 303 and not _ended(sid)
+            # The night's change log names the member who did it, not the server admin.
+            with connect() as db:
+                who = {r[0] for r in db.execute("SELECT user_id FROM evening_log WHERE evening_id=?", (sid,))}
+            assert who == {"nightmember"}
             # Deleting a night stays with club administrators.
             assert member.post(f"/sessions/{sid}/delete", follow_redirects=False).status_code == 403
     finally:

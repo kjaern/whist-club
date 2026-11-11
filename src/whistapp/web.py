@@ -358,6 +358,20 @@ def session_players(db, sid, active_only=False):
     ).fetchall()
 
 
+def short_names(players):
+    """A short name for each player on phones: the shortest start of the name, at least three
+    letters, that no other player at the night shares. Players with the same full name
+    share a short name too."""
+    names = {p["id"]: " ".join(p["name"].split()) for p in players}
+    short = {}
+    for pid, name in names.items():
+        others = [n.casefold() for o, n in names.items() if o != pid and n.casefold() != name.casefold()]
+        size = min(3, len(name))
+        while size < len(name) and any(o.startswith(name[:size].rstrip().casefold()) for o in others): size += 1
+        short[pid] = name[:size].rstrip()
+    return short
+
+
 def next_dealer(players, last_dealer, hand_count):
     """Who deals the next hand: the next player at the table after the last dealer, in seat
     order, so the deal moves on round the table even when someone joins or leaves.
@@ -544,6 +558,8 @@ def view_data(db, sid):
         score_colors=score_colors,
         suggested=suggested,
         dealer=dealer,
+        # Phones in portrait show these instead of the full names, to fit more on a line.
+        short_names=short_names(players),
         # The club's short bid names for the compact table, as set now on Klubadministration.
         bid_short=bid_short_names(json.loads((db.execute(
             "SELECT bid_settings FROM club_settings WHERE id=?", (session["club_id"],)).fetchone() or ["{}"])[0] or "{}")),

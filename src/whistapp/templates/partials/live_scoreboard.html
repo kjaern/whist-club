@@ -1,4 +1,4 @@
-{% from 'partials/marks.html' import dealer_class %}
+{% from 'partials/marks.html' import dealer_class, short_form %}
 <div id="live-scoreboard" {% if not session.ended_at %}hx-get="/sessions/{{session.id}}/live/scoreboard?v={{ live_version|default('') }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
 <p><a href="/sessions/{{session.id}}/history">Ændringshistorik</a></p>
 <section class="card night-results">
@@ -38,7 +38,7 @@
           </th>
           {% for p in players %}
             <th>
-              {{p.name}}
+              {{ short_form(p.name, short_names[p.id]) }}
               {% if not p.active %}
                 (gået)
               {% endif %}

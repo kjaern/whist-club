@@ -1,3 +1,6 @@
 {# Who dealt the hand (stored with each live hand since rounds were added): their name is
    shown in yellow, and in the table their cell has a yellow edge. #}
 {% macro dealer_class(row, p) %}{% if row.hand.dealer_id is not none and p.id == row.hand.dealer_id %} dealer{% endif %}{% endmacro %}
+{# Text with the short form that phones in portrait show instead, such as a player's short
+   name (web.short_names) or a bid's short name. #}
+{% macro short_form(full, short) %}<span class="full-form">{{ full }}</span><span class="short-form">{{ short or full }}</span>{% endmacro %}

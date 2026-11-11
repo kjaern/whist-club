@@ -78,7 +78,7 @@ def test_cards_and_players_line_grey_out_whoever_sits_out():
             html = client.get(f"/sessions/{sid}").text
             card = _cards(html)
             players_on_card = {m[1]: m for m in re.findall(
-                r'<span class="card-player( not-playing)?(?: dealer)?">\s*<span class="card-name(?: dealer)?"(?: title="Giver")?>(\w)</span>\s*'
+                r'<span class="card-player( not-playing)?(?: dealer)?">\s*<span class="card-name(?: dealer)?"(?: title="Giver")?><span class="full-form">(\w)</span><span class="short-form">\w</span></span>\s*'
                 r'<span class="delta[^"]*">([^<]*)</span>\s*<span class="card-total">([^<]*)</span>', card)}
             assert players_on_card["E"][0] and players_on_card["E"][2] == "–"  # E sat out, greyed
             # A–D played: each shows the change and the score after the hand.
@@ -220,7 +220,7 @@ def test_dealer_is_marked_in_table_cards_and_next_hand():
             assert re.search(rf'class="player-name dealer" data-id="{ids["B"]}"', line)
             assert line.count(' dealer"') == 1
             cards = _cards(html)
-            assert '<span class="card-name dealer" title="Giver">A</span>' in cards and cards.count('card-name dealer') == 1
+            assert '<span class="card-name dealer" title="Giver"><span class="full-form">A</span><span class="short-form">A</span></span>' in cards and cards.count('card-name dealer') == 1
             for url in (f"/sessions/{sid}", f"/sessions/{sid}/live"):
                 table = client.get(url).text
                 table = table[table.index('<table class="night"'):]

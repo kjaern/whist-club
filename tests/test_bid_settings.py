@@ -264,7 +264,9 @@ def test_club_sets_short_bid_names_for_the_compact_table(restore_club_rules):
                         "partner": players[2], "actual": "8", "participants": players, "base_hand_id": base})
             for url in (f"/sessions/{sid}", f"/sessions/{sid}/live"):
                 html = client.get(url).text
-                assert '<span class="bid-name">Almindelige</span><span class="bid-short">Alm</span> <span class="bid-target">8</span>' in html
+                assert '<span class="bid-target">8</span> <span class="bid-name">Almindelige</span><span class="bid-short">Alm</span>' in html
+                # The phone cards use the short name too, with the number first.
+                assert '<strong>8 <span class="full-form">Almindelige</span><span class="short-form">Alm</span></strong>' in html
         finally:
             client.post(f"/sessions/{sid}/delete")
 

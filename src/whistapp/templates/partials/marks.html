@@ -3,4 +3,10 @@
 {% macro dealer_class(row, p) %}{% if row.hand.dealer_id is not none and p.id == row.hand.dealer_id %} dealer{% endif %}{% endmacro %}
 {# Text with the short form that phones in portrait show instead, such as a player's short
    name (web.short_names) or a bid's short name. #}
+{# The number shown before a bid, as in "8 Almindelige": only for bids whose number is bid.
+   Sol, Ren sol and Bordlægger store a fixed number for ranking, which is not shown. #}
+{% macro bid_target(hand, rules) %}{% if hand.target and hand.bid_key in rules.bids and rules.bids[hand.bid_key].target == 'variable' %}{{ hand.target }}{% endif %}{% endmacro %}
+{# The bid in a hand table cell: the full name, or the club's short name when the table is
+   stacked, with the number first. #}
+{% macro table_bid(hand, rules, bid_short) %}{% set target = bid_target(hand, rules)|trim %}<span class="bid-label">{% if target %}<span class="bid-target">{{ target }}</span> {% endif %}<span class="bid-name">{{ hand.bid_label }}</span><span class="bid-short">{{ bid_short.get(hand.bid_key, hand.bid_label) }}</span></span>{% endmacro %}
 {% macro short_form(full, short) %}<span class="full-form">{{ full }}</span><span class="short-form">{{ short or full }}</span>{% endmacro %}

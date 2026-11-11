@@ -1,4 +1,4 @@
-{% from 'partials/marks.html' import dealer_class, short_form %}
+{% from 'partials/marks.html' import dealer_class, short_form, bid_target, table_bid %}
 {% macro hand_editor(row) %}
             <details class="row-editor" >
               <summary title="Rediger resultat">
@@ -6,10 +6,8 @@
               </summary>
               <div class="editor-panel">
                 <div class="editor-heading">
-                  Hånd {{row.number}} · {{row.hand.bid_label}}
-                  {% if row.hand.target %}
-                    {{row.hand.target}}
-                  {% endif %}
+                  {% set target = bid_target(row.hand, rules)|trim %}
+                  Hånd {{row.number}} · {% if target %}{{ target }} {% endif %}{{row.hand.bid_label}}
                 </div>
                 <form hx-post="/sessions/{{session.id}}/hands/{{row.hand.id}}/result" hx-target="#session-content">
                   <label>Melder<select name="declarer" required>
@@ -126,9 +124,9 @@
               {{ dealer_class(row, p) }}"{% if dealer_class(row, p) %} title="Giver"{% endif %}>
               <div class="cell-line"><span class="cell-bid">
                 {% if p.id in row.special_results %}
-                  <span class="bid-label"><span class="bid-name">{{row.hand.bid_label}}</span><span class="bid-short">{{ bid_short.get(row.hand.bid_key, row.hand.bid_label) }}</span>{% if row.hand.target %} <span class="bid-target">{{row.hand.target}}</span>{% endif %}</span><span class="actual">{{row.special_results[p.id].actual if row.special_results[p.id].actual is not none else '…'}}</span>
+                  {{ table_bid(row.hand, rules, bid_short) }}<span class="actual">{{row.special_results[p.id].actual if row.special_results[p.id].actual is not none else '…'}}</span>
                 {% elif p.id==row.declarer %}
-                  <span class="bid-label"><span class="bid-name">{{row.hand.bid_label}}</span><span class="bid-short">{{ bid_short.get(row.hand.bid_key, row.hand.bid_label) }}</span>{% if row.hand.target %} <span class="bid-target">{{row.hand.target}}</span>{% endif %}</span><span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
+                  {{ table_bid(row.hand, rules, bid_short) }}<span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
                 {% elif p.id==row.partner and row.hand.actual is not none %}
                   <span class="partner-mark" title="Makker">M</span>
                 {% elif p.id not in row.participants %}

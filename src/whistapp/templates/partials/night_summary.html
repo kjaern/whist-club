@@ -1,8 +1,8 @@
 {# Totals and every hand as compact cards, newest first: the phone view of a night, used in
    Spiladministration (with Ret on each card) and in the live view. The full table is one tap away. #}
-{% from 'partials/marks.html' import dealer_class, short_form %}
+{% from 'partials/marks.html' import dealer_class, short_form, bid_target %}
 {% set shorts = short_names|default({}) %}
-{% set names = {} %}{% for p in players %}{% set _ = names.update({p.id: short_form(p.name, shorts.get(p.id))}) %}{% endfor %}
+{% set names = {} %}{% for p in players %}{% set _ = names.update({p.id: p.name}) %}{% endfor %}
   <div class="night-summary">
     <div class="total-chips">
       {% for p in players %}
@@ -11,17 +11,7 @@
     </div>
     {% if rows %}
       <h3>Hænder · nyeste først</h3>
-      {# Phones: each player's column is as wide as the longest short name, change and score
-         need, so as many players as possible fit on one line. #}
-      {% set widest = namespace(name=1, change=1, total=1) %}
-      {% for p in players %}
-        {% set widest.name = [widest.name, (shorts.get(p.id) or p.name)|length]|max %}
-      {% endfor %}
-      {% for row in rows %}
-        {% for value in row.changes.values() %}{% set widest.change = [widest.change, value|length + (0 if value.startswith('-') else 1)]|max %}{% endfor %}
-        {% for value in row.totals.values() %}{% set widest.total = [widest.total, value|length]|max %}{% endfor %}
-      {% endfor %}
-      <div class="recent-hands" style="--card-player-width: calc({{ widest.name + widest.change + widest.total }}ch + 8px)">
+      <div class="recent-hands">
         {% for row in rows|reverse %}
           {# Rounds are stored with each hand when it is saved (web.hand_round). #}
           {% if row.round_no and (loop.first or row.round_end) %}
@@ -32,11 +22,12 @@
               <span class="hand-num">#{{row.number}}</span>
               <span class="recent-bid">
                 {% if row.special_results %}
-                  <strong>{{ short_form(row.hand.bid_label, bid_short.get(row.hand.bid_key)) }}{% if row.hand.target %} {{row.hand.target}}{% endif %}</strong>
+                  {# Full player names here; the number comes before the bid, as in "8 Almindelige →9". #}
+                  <strong>{% set target = bid_target(row.hand, rules)|trim %}{% if target %}{{ target }} {% endif %}{{ short_form(row.hand.bid_label, bid_short.get(row.hand.bid_key)) }}</strong>
                   {% for pid, result in row.special_results.items() %}{{ ' · ' if not loop.first else ' ' }}{{names[pid]}} <span class="actual">{{result.actual if result.actual is not none else '…'}}</span>{% endfor %}
                 {% else %}
-                  {{names[row.declarer] if row.declarer in names else '?'}} · <strong>{{ short_form(row.hand.bid_label, bid_short.get(row.hand.bid_key)) }}{% if row.hand.target %} {{row.hand.target}}{% endif %}</strong> <span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
-                  {% if row.partner and row.partner != row.declarer and row.partner in names %} · {{ short_form('Makker', 'M') }} {{names[row.partner]}}{% endif %}
+                  {{names[row.declarer] if row.declarer in names else '?'}} <strong>{% set target = bid_target(row.hand, rules)|trim %}{% if target %}{{ target }} {% endif %}{{ short_form(row.hand.bid_label, bid_short.get(row.hand.bid_key)) }}</strong> <span class="actual">{{row.hand.actual if row.hand.actual is not none else '…'}}</span>
+                  {% if row.partner and row.partner != row.declarer and row.partner in names %} {{ short_form('Makker', 'M') }} {{names[row.partner]}}{% endif %}
                 {% endif %}
               </span>
               {% if hand_editor is defined %}{{ hand_editor(row) }}{% endif %}
@@ -45,7 +36,7 @@
               {# Every player with their change and score after the hand; those sitting out greyed. #}
               {% for p in players %}
                 <span class="card-player{% if p.id not in row.participants %} not-playing{% endif %}{{ dealer_class(row, p) }}">
-                  <span class="card-name{{ dealer_class(row, p) }}"{% if dealer_class(row, p) %} title="Giver"{% endif %}>{{names[p.id]}}</span>
+                  <span class="card-name{{ dealer_class(row, p) }}"{% if dealer_class(row, p) %} title="Giver"{% endif %}>{{ short_form(p.name, shorts.get(p.id)) }}</span>
                   {% if p.id in row.changes %}<span class="delta{% if row.changes[p.id].startswith('-') %} delta-negative{% elif row.changes[p.id]|float > 0 %} delta-positive{% endif %}">{{'+' if not row.changes[p.id].startswith('-') else ''}}{{row.changes[p.id]}}</span>{% else %}<span class="delta">–</span>{% endif %}
                   <span class="card-total">{{row.totals[p.id]}}</span>
                 </span>
@@ -71,4 +62,31 @@ function whistApplyShowAll() {
   if (window.whistFitTables) window.whistFitTables();
 }
 whistApplyShowAll();
+// Phones: size the cards' player columns from the widest short name, change and score as
+// they are drawn, so as many players as fit share a line. Hidden cards (on a PC) are left
+// alone and measured when the window narrows.
+window.whistFitCards = window.whistFitCards || function () {
+  document.querySelectorAll('.recent-hands').forEach(list => {
+    const first = list.querySelector('.card-player');
+    if (!first || !first.offsetWidth) return;
+    const gap = parseFloat(getComputedStyle(first).columnGap) || 0;
+    let widest = 0;
+    list.querySelectorAll('.card-player').forEach(player => {
+      const parts = [player.querySelector('.card-name .short-form'), player.querySelector('.delta'), player.querySelector('.card-total')];
+      if (parts.some(part => !part)) return;
+      widest = Math.max(widest, parts.reduce((sum, part) => sum + part.getBoundingClientRect().width, 0) + 2 * gap);
+    });
+    if (widest) list.style.setProperty('--card-player-width', Math.ceil(widest) + 'px');
+  });
+};
+if (!window.whistFitCardsBound) {
+  window.whistFitCardsBound = true;
+  let pending = false;
+  window.addEventListener('resize', () => {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => { pending = false; window.whistFitCards(); });
+  });
+}
+window.whistFitCards();
 </script>

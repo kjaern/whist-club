@@ -601,13 +601,13 @@ header > a:first-child { flex-shrink: 0; }
 /* Serveradministration → Backup */
 .backup-list th,.backup-list td{text-align:left;padding:.25rem 1rem .25rem 0;white-space:nowrap}
 
-/* Phones in portrait: short player and bid names and "M" for Makker in the hand cards, short
-   player names in the table head,
+/* Phones in portrait: short bid names and "M" for Makker on the hand cards' first line, short
+   player names on the cards' players and in the table head,
    and each card's player columns only as wide as they need, so more players fit on a line. */
 .short-form { display: none; }
 @media (max-width: 700px) {
   .full-form { display: none; } .short-form { display: inline; }
-  .recent-hands .recent-deltas { grid-template-columns: repeat(auto-fill, minmax(var(--card-player-width, 100px), 1fr)); gap: 2px 8px; font-variant-numeric: tabular-nums; }
-  .recent-deltas .card-player { gap: 4px; }
+  .recent-hands .recent-deltas { grid-template-columns: repeat(auto-fill, minmax(var(--card-player-width, 100px), 1fr)); gap: 2px 6px; font-variant-numeric: tabular-nums; }
+  .recent-deltas .card-player { gap: 3px; }
   .recent-deltas .card-total { min-width: 0; }
 }

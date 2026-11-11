@@ -139,7 +139,8 @@ shows as needed and lists it again on every run. Running it again posts nothing 
 ### backfill-dealers (Giver and rounds on early nights)
 
 Live nights saved before 7 Nov 2026 have no dealer, so they show no Giver and no round lines.
-This fills them in with the rotation the app showed then (the first seat deals the first hand):
+This fills them in with the app's dealer rule: the first seat deals the first hand, and the deal
+passes to the next player at the table after the last dealer:
 
 ```sh
 docker compose exec whist whistapp migrate backfill-dealers
@@ -147,6 +148,16 @@ docker compose exec whist whistapp migrate backfill-dealers
 
 Imported nights are left alone, and so are nights where only some hands lack a dealer; those
 are listed. Running it again changes nothing.
+
+The first version of `backfill-dealers` (commit 3b9d2a2) counted the dealer from the first seat
+on every hand, which goes wrong once a player has left. If you ran that version, correct those
+nights with:
+
+```sh
+docker compose exec whist whistapp migrate fix-backfilled-dealers
+```
+
+It only changes early nights whose dealers are exactly what that version wrote.
 
 ### Removing a club
 

@@ -13,9 +13,9 @@ and `run(db) -> str`.
 
 from .. import backups
 from ..database import connect
-from . import backfill_dealers, drop_night_rule_columns, kasse_post_history
+from . import backfill_dealers, drop_night_rule_columns, fix_backfilled_dealers, kasse_post_history
 
-MIGRATIONS = [drop_night_rule_columns, kasse_post_history, backfill_dealers]
+MIGRATIONS = [drop_night_rule_columns, kasse_post_history, backfill_dealers, fix_backfilled_dealers]
 
 
 def status():

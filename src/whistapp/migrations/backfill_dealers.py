@@ -2,11 +2,10 @@
 
 Since commit ae0f25f every live hand stores its dealer (`hands.dealer_id`), its round and whether
 it ends the round; hands saved before that have all three NULL, so those nights show no Giver
-and no round lines. The app of the time had no dealer, but it put a player first in its rotation
-for every hand: the player at position (hands so far) modulo (players at the table), in seat
-order, and that is the player who dealt. This migration replays each such night with that rule;
-a dealer who sat the hand out passes it to the next player who played (`web.hand_dealer`). Rounds
-follow the app's round rule (`web.next_round`).
+and no round lines. This migration replays each such night hand by hand with the app's own rules
+(`web.next_dealer`, `web.hand_dealer` and `web.next_round`): the first player in seat order deals
+the first hand, the deal passes to the next player at the table after the last dealer, and a
+dealer who sits a hand out passes it to the next player who plays.
 
 Who sat at the table at each hand was not stored, only who played it, so a player counts as at
 the table from the first hand they played; one who has left (`players.active = 0`) counts until
@@ -21,16 +20,16 @@ night with only some hands filled in, or a hand without players or with a player
 among the night's players; those are listed. Running it again changes nothing.
 """
 
-from ..web import hand_dealer, next_round
+from ..web import hand_dealer, next_dealer, next_round
 
 NAME = "backfill-dealers"
 DESCRIPTION = ("Fill in Giver and rounds on live nights saved before dealers were recorded (7 Nov 2026), "
-               "with the rotation the app showed then. Imported nights are left alone.")
+               "passing the deal to the next player at the table. Imported nights are left alone.")
 
 
-def replay(db, sid):
-    """[(hand id, dealer id, round no, round end)] for the night, or None if a hand has no players
-    or a player who is not one of the night's players."""
+def _night(db, sid):
+    """(seats, hand ids, who played each hand), or None if a hand has no players or a player who
+    is not one of the night's players."""
     seats = db.execute("SELECT id,active FROM players WHERE session_id=? ORDER BY seat_order,id", (sid,)).fetchall()
     seat_ids = {p["id"] for p in seats}
     hands = [r[0] for r in db.execute("SELECT id FROM hands WHERE session_id=? ORDER BY id", (sid,))]
@@ -39,6 +38,16 @@ def replay(db, sid):
         played.append({r[0] for r in db.execute("SELECT player_id FROM hand_participants WHERE hand_id=?", (hid,))})
         if not played[-1] or not played[-1] <= seat_ids:
             return None
+    return seats, hands, played
+
+
+def _replay(db, sid, rotation_start):
+    """[(hand id, dealer id, round no, round end)], or None (see `_night`). `rotation_start(players,
+    previous dealer, hand index, table)` names whose turn it is to deal."""
+    night = _night(db, sid)
+    if night is None:
+        return None
+    seats, hands, played = night
     first, last = {}, {}
     for k, ids in enumerate(played):
         for pid in ids:
@@ -48,11 +57,16 @@ def replay(db, sid):
         table = [p["id"] for p in seats
                  if p["id"] in first and first[p["id"]] <= k and (p["active"] or k <= last[p["id"]])]
         players = [{"id": p["id"], "active": p["id"] in table} for p in seats]
-        dealer = hand_dealer(players, table[k % len(table)], played[k])
         prev = out[-1] if out else None
+        dealer = hand_dealer(players, rotation_start(players, prev[1] if prev else None, k, table), played[k])
         dealt = {h[1] for h in out if prev and h[2] == prev[2]}
         out.append((hid, dealer, *next_round(prev[2:] if prev else None, dealt, set(table), dealer)))
     return out
+
+
+def replay(db, sid):
+    """The night's dealers and rounds by the app's rule: the deal passes on from the last dealer."""
+    return _replay(db, sid, lambda players, last, k, table: next_dealer(players, last, k))
 
 
 def _plan(db):
@@ -81,11 +95,17 @@ def blockers(db):
     return []
 
 
+def write(db, todo):
+    """Store replayed hands; returns how many hands changed."""
+    return sum(db.execute("""UPDATE hands SET dealer_id=?,round_no=?,round_end=? WHERE id=?
+                             AND (dealer_id IS NOT ? OR round_no IS NOT ? OR round_end IS NOT ?)""",
+                          (dealer, round_no, round_end, hid, dealer, round_no, round_end)).rowcount
+               for rows in todo.values() for hid, dealer, round_no, round_end in rows)
+
+
 def run(db):
     todo, review = _plan(db)
-    hands = sum(db.execute("UPDATE hands SET dealer_id=?,round_no=?,round_end=? WHERE id=? AND dealer_id IS NULL",
-                           (dealer, round_no, round_end, hid)).rowcount
-                for rows in todo.values() for hid, dealer, round_no, round_end in rows)
+    hands = write(db, todo)
     lines = [f"filled in dealers and rounds on {hands} hands in {len(todo)} nights: "
              + ", ".join(f"#{sid}" for sid in todo)]
     if review:

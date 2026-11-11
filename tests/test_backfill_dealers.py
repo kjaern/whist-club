@@ -7,8 +7,8 @@ import whistapp.database as database
 from whistapp import migrations
 from whistapp.database import connect, init_db
 from whistapp.main import app
-from whistapp.migrations import backfill_dealers
-from test_phone_editor import _five, _play_suggested
+from whistapp.migrations import backfill_dealers, fix_backfilled_dealers
+from test_phone_editor import _five, _names, _play_suggested
 
 
 def _saved(sid):
@@ -23,14 +23,30 @@ def _replayed_after_wiping(sid):
         return backfill_dealers.replay(db, sid)
 
 
-def test_replay_gives_back_what_the_live_app_saved_for_a_full_table():
-    """With everyone playing the hands the rotation suggests, the old rotation and today's rule agree."""
+@pytest.mark.parametrize("night", ["full table", "dealer leaves", "leaves before dealing and someone joins"])
+def test_replay_gives_back_what_the_live_app_saved(night):
     with TestClient(app) as client:
         client.post("/login", data={"username": "admin", "password": "a$$word"})
         sid = _five(client)
         try:
-            for _ in range(12):
-                _play_suggested(client, sid)
+            if night == "full table":
+                for _ in range(12):
+                    _play_suggested(client, sid)
+            elif night == "dealer leaves":  # B deals hand 7, then leaves
+                for _ in range(7):
+                    _play_suggested(client, sid)
+                client.post(f"/sessions/{sid}/players/{_names(sid)['B']}/toggle")
+                for _ in range(5):
+                    _play_suggested(client, sid)
+            else:  # B leaves before their deal in round 2, then F joins after E
+                for _ in range(6):
+                    _play_suggested(client, sid)
+                client.post(f"/sessions/{sid}/players/{_names(sid)['B']}/toggle")
+                for _ in range(3):
+                    _play_suggested(client, sid)
+                client.post(f"/sessions/{sid}/players", data={"name": "F", "before_player": "0"})
+                for _ in range(6):
+                    _play_suggested(client, sid)
             live = _saved(sid)
             assert all(dealer is not None for _, dealer, _, _ in live)
             assert _replayed_after_wiping(sid) == live
@@ -46,10 +62,11 @@ def tmp_db(tmp_path, monkeypatch):
     return tmp_path / "backups"
 
 
-def _night(db, origin, hands, dealers=None, gone=""):
+def _night(db, origin, hands, dealers=None, gone="", commit=None):
     """A night with players A–E in seat order; `hands` lists who played each hand, by letter, and
     `gone` who has left the table."""
-    sid = db.execute("INSERT INTO sessions(title,club_id,origin) VALUES (?,1,?)", (origin, origin)).lastrowid
+    sid = db.execute("INSERT INTO sessions(title,club_id,origin,server_commit) VALUES (?,1,?,?)",
+                     (origin, origin, commit)).lastrowid
     ids = {n: db.execute("INSERT INTO players(session_id,name,active,seat_order) VALUES (?,?,?,?)",
                          (sid, n, int(n not in gone), i)).lastrowid for i, n in enumerate("ABCDE")}
     for k, letters in enumerate(hands):
@@ -98,15 +115,44 @@ def _replayed(db, sid, names):
     return [(names[dealer], round_no, end) for _, dealer, round_no, end in backfill_dealers.replay(db, sid)]
 
 
-def test_replay_follows_the_rotation_the_old_app_showed(tmp_db):
+# D deals hand 4 and leaves: the deal passes on to E, the next player at the table.
+DEALER_LEAVES = ["ABCD", "BCDE", "CDEA", "DEAB", "EABC", "ABCE", "ABCE"]
+
+
+def test_the_deal_passes_on_from_the_last_dealer(tmp_db):
     with connect() as db:
-        # B, the rotation's second, sits hand 2 out: C deals it, and hand 3 is still C's, as the
-        # old app counted hands (today's rule would pass hand 3 on to D).
+        # B sits hand 2 out on his turn: C deals it, and D deals hand 3.
         sid, names = _night(db, "live", ["ABCD", "ACDE", "CDEA"])
-        assert _replayed(db, sid, names) == [("A", 1, 0), ("C", 1, 0), ("C", 1, 0)]
-        # B leaves after hand 2: the old app counted on among A, C, D, E.
-        sid, names = _night(db, "live", ["ABCD", "BCDE", "CDEA", "ACDE"], gone="B")
-        assert _replayed(db, sid, names) == [("A", 1, 0), ("B", 1, 0), ("D", 1, 0), ("E", 1, 0)]
+        assert _replayed(db, sid, names) == [("A", 1, 0), ("C", 1, 0), ("D", 1, 0)]
+        sid, names = _night(db, "live", DEALER_LEAVES, gone="D")
+        assert _replayed(db, sid, names) == [("A", 1, 0), ("B", 1, 0), ("C", 1, 0), ("D", 1, 0),
+                                             ("E", 1, 1), ("A", 2, 0), ("B", 2, 0)]
+
+
+def _store(db, rows):
+    for hid, dealer, round_no, end in rows:
+        db.execute("UPDATE hands SET dealer_id=?,round_no=?,round_end=? WHERE id=?", (dealer, round_no, end, hid))
+
+
+def test_fix_corrects_only_what_the_first_backfill_wrote(tmp_db):
+    with connect() as db:
+        early, names = _night(db, "live", DEALER_LEAVES, gone="D", commit="4756a1c")
+        live, _ = _night(db, "live", DEALER_LEAVES, gone="D", commit="ae0f25f")  # recorded live
+        edited, _ = _night(db, "live", DEALER_LEAVES, gone="D", commit="4756a1c")
+        full, _ = _night(db, "live", ["ABCD", "BCDE", "CDEA"], commit="4756a1c")  # nothing to correct
+        for sid in (early, live, edited, full):
+            _store(db, fix_backfilled_dealers.first_version_replay(db, sid))
+        first_hand = db.execute("SELECT MIN(id) FROM hands WHERE session_id=?", (edited,)).fetchone()[0]
+        db.execute("UPDATE hands SET round_end=1 WHERE id=?", (first_hand,))  # changed by hand since
+        assert "".join(names[r[1]] for r in fix_backfilled_dealers.first_version_replay(db, early)) == "ABCDABC"
+    before = {sid: _saved(sid) for sid in (live, edited, full)}
+    assert "fix-backfilled-dealers: needed" in migrations.status()
+
+    result = migrations.run("fix-backfilled-dealers")
+    assert f"on 3 hands in 1 nights: #{early}" in result
+    assert "".join(names[r[1]] for r in _saved(early)) == "ABCDEAB"
+    assert {sid: _saved(sid) for sid in before} == before
+    assert "already done" in migrations.run("fix-backfilled-dealers")
 
 
 def test_nights_with_a_hand_without_known_players_are_left_alone(tmp_db):

@@ -78,29 +78,57 @@ def test_partner_seat_left_opposite_right(tmp_path, monkeypatch):
     assert table.footer['count'] == 4 and table.footer['left'].text == '100,0 % (2)'
 
 
-def test_fixed_tables_count_rotations_as_one(tmp_path, monkeypatch):
+def _orders(table):
+    return [(r['table'], r['hands'], r['nights'], r['last']) for r in _texts(table)]
+
+
+def test_playing_order_counts_rotations_as_one(tmp_path, monkeypatch):
     _db(tmp_path, monkeypatch)
     with connect() as db:
         for sid, seats in enumerate([[1, 2, 3, 4], [3, 4, 1, 2], [1, 3, 2, 4], [2, 3, 4, 1]], start=1):
             p = _night(db, sid, seats, day=sid)
             _hand(db, sid, p, seats, [1, 1, -1, -1], seats[0], seats[1])
-        _night(db, 5, [1, 2], day=5)  # no hands: not a table
+        _night(db, 5, [1, 2], day=5)  # no hands: no order
         data = load(db, Scope())
-    assert _texts(Seatings().compute(data)) == [
-        dict(table='M1 → M2 → M3 → M4', nights='3', last='4/3/2026', streak='2'),
-        dict(table='M1 → M3 → M2 → M4', nights='1', last='3/3/2026', streak='1'),
-    ]
+    table = Seatings().compute(data)
+    assert _orders(table) == [('M1 → M2 → M3 → M4', '3', '3', '4/3/2026'), ('M1 → M3 → M2 → M4', '1', '1', '3/3/2026')]
+    # Each member's average per hand in that order; the first two seated won each hand.
+    rows = _texts(table)
+    assert [c.label for c in table.columns] == ['Rækkefølge', 'Hænder', 'Aftener', 'Senest', 'M1', 'M2', 'M3', 'M4']
+    assert [rows[0][f'm{m}'] for m in (1, 2, 3, 4)] == ['-0,33', '0,33', '0,33', '-0,33']
+    assert [rows[1][f'm{m}'] for m in (1, 2, 3, 4)] == ['1', '-1', '1', '-1']
 
 
-def test_a_night_without_a_table_breaks_the_streak(tmp_path, monkeypatch):
+def test_playing_order_follows_who_played_each_hand(tmp_path, monkeypatch):
+    """A member who sits over or has gone home is not in the hand's order."""
     _db(tmp_path, monkeypatch)
     with connect() as db:
-        for sid in (1, 3):
-            p = _night(db, sid, [1, 2, 3, 4], day=sid)
-            _hand(db, sid, p, [1, 2, 3, 4], [1, 1, -1, -1], 1, 2)
-        _night(db, 2, [1, 2, 3, 4], day=2)  # held, but no hands played
+        p = _night(db, 1, [1, 2, 3, 5, 4])
+        _hand(db, 1, p, [1, 2, 3, 5], [2, 2, -2, -2], 1, 2)   # M4 sits over
+        _hand(db, 1, p, [2, 3, 5, 4], [3, 3, -3, -3], 2, 3)   # M1 sits over
+        _hand(db, 1, p, [1, 2, 3, 4], [4, -4, 4, -4], 1, 3)   # M5 sits over
+        for _ in range(2):                                    # M5 has gone home
+            _hand(db, 1, p, [1, 2, 3, 4], [1, 1, -1, -1], 1, 2)
+        g = _night(db, 2, [1, 2, 3, None], day=2)
+        _hand(db, 2, g, [1, 2, 3, None], [9, 9, -9, -9], 1, 2)  # a guest played: left out
         data = load(db, Scope())
-    assert _texts(Seatings().compute(data)) == [dict(table='M1 → M2 → M3 → M4', nights='2', last='3/3/2026', streak='1')]
+    table = Seatings().compute(data)
+    assert _orders(table) == [
+        ('M1 → M2 → M3 → M4', '3', '1', '1/3/2026'),
+        ('M1 → M2 → M3 → M5', '1', '1', '1/3/2026'),
+        ('M2 → M3 → M5 → M4', '1', '1', '1/3/2026'),
+    ]
+    rows = _texts(table)
+    assert [rows[0][f'm{m}'] for m in (1, 2, 3, 4, 5)] == ['2', '-0,67', '0,67', '-2', '—']
+    assert [rows[2][f'm{m}'] for m in (1, 2, 3, 4, 5)] == ['—', '3', '3', '-3', '-3']
+    # A single night shows it too.
+    night = load_night(1)
+    assert _orders(Seatings().compute(night))[0] == ('M1 → M2 → M3 → M4', '3', '1', '1/3/2026')
+
+
+def load_night(sid):
+    with connect() as db:
+        return load(db, Scope('night', session_id=sid))
 
 
 def test_who_sat_where_is_never_graphed(tmp_path, monkeypatch):

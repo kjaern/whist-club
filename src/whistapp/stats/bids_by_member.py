@@ -34,6 +34,7 @@ class BidsByMember(Statistic):
     title = "Hvem melder hvad"
     topic = "meldinger"
     description = ("Antal meldinger pr. klubmedlem og melding, med sejrsprocent i parentes. "
+                   "Klubben er alle medlemmers meldinger lagt sammen. "
                    "Påskrig og gæsters meldinger tæller ikke med.")
 
     def compute(self, data):
@@ -53,7 +54,15 @@ class BidsByMember(Statistic):
             vip = [per[b] for b in bids if b.startswith("vip") and b in per]
             row["vip"] = text(*(sum(c[i] for c in vip) for i in range(3))) if vip else Cell("0", 0)
             rows.append(row)
-        columns = [Column("name", "Spiller", "Klubmedlemmet.", "text")]
+        footer = None
+        if rows:
+            # Klubben: all members' bids together.
+            club = {b: [sum(per[b][i] for per in counts.values() if b in per) for i in range(3)] for b in bids}
+            n, won, lost = (sum(c[i] for c in club.values()) for i in range(3))
+            footer = dict(name="Klubben", total=n, share=ratio(n, all_bids), pct=ratio(won, won + lost))
+            footer.update({b: text(*c) for b, c in club.items()})
+            footer["vip"] = text(*(sum(c[i] for b, c in club.items() if b.startswith("vip")) for i in range(3)))
+        columns =[Column("name", "Spiller", "Klubmedlemmet.", "text")]
         for b in bids:
             if b == next((x for x in bids if x.startswith("vip")), None):
                 # VIP is one bid; the levels follow its total.
@@ -64,4 +73,4 @@ class BidsByMember(Statistic):
             Column("share", "Andel", "Medlemmets andel af alle klubmedlemmers meldinger.", "pct"),
             Column("pct", "Sejr %", "Vundne af de afgjorte meldinger, i procent.", "pct"),
         ]
-        return Table(columns, rows, empty="Ingen meldinger fra klubmedlemmer i perioden.")
+        return Table(columns, rows, footer=footer, empty="Ingen meldinger fra klubmedlemmer i perioden.")

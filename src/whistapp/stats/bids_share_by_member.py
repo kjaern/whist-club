@@ -9,7 +9,8 @@ class BidsShareByMember(Statistic):
     title = "Hvem melder hvad %"
     topic = "meldinger"
     description = ("Hvor ofte hvert klubmedlem melder en melding, i procent af medlemmets egne meldinger. "
-                   "Påskrig og gæsters meldinger tæller ikke med.")
+                   "Klubben er alle medlemmers meldinger lagt sammen, så et medlem med mange meldinger "
+                   "vejer tungere. Påskrig og gæsters meldinger tæller ikke med.")
 
     def compute(self, data):
         counts, names, labels, bids = member_bids(data)

@@ -74,6 +74,11 @@ def test_meldinger_count_each_bid_and_attempt(tmp_path, monkeypatch):
          'share': '50,0 %', 'pct': '100,0 %'}
     assert by_member['M2']['almindelige'] == '1 (0,0 %)' and by_member['M2']['sol'] == '0'
     assert by_member['M3']['sol'] == '1 (0,0 %)' and 'M4' not in by_member
+    # Klubben: all members' bids together.
+    club = {c.key: cell(by_member_table.footer[c.key], c.fmt)[0] for c in by_member_table.columns}
+    assert {k: club[k] for k in ('name', 'almindelige', 'sol', 'halve', 'vip', 'total', 'share', 'pct')} == \
+        {'name': 'Klubben', 'almindelige': '2 (50,0 %)', 'sol': '2 (50,0 %)', 'halve': '0', 'vip': '0',
+         'total': '4', 'share': '100,0 %', 'pct': '50,0 %'}
 
     assert _texts(SpecialMulti().compute(data)) == [dict(size='2 meldere', hands='1')]
 

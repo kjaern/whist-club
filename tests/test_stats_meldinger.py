@@ -6,6 +6,7 @@ from whistapp.main import app
 from whistapp.stats.base import cell
 from whistapp.stats.bids_by_member import BidsByMember
 from whistapp.stats.bids_played import BidsPlayed
+from whistapp.stats.bids_share_by_member import BidsShareByMember
 from whistapp.stats.data import Scope, load
 from whistapp.rule_versions import stamp_night
 from whistapp.stats.special_multi import SpecialMulti
@@ -166,3 +167,30 @@ def test_vip_levels_are_grouped_under_vip(tmp_path, monkeypatch):
                    ('VIP2', 'sub1', '2', '2'), ('VIP3', 'sub1', '0', '—')]
     m1 = {r['name']: r for r in _texts(BidsByMember().compute(data))}['M1']
     assert (m1['vip'], m1['vip1'], m1['vip2'], m1['vip3']) == ('3 (66,7 %)', '1 (100,0 %)', '2 (50,0 %)', '0')
+    # The same bids as shares of the member's own five bids.
+    m1 = {r['name']: r for r in _texts(BidsShareByMember().compute(data))}['M1']
+    assert (m1['vip'], m1['vip1'], m1['vip2'], m1['vip3'], m1['total']) == ('60,0 %', '20,0 %', '40,0 %', '0,0 %', '5')
+
+
+def test_bid_shares_are_of_the_members_own_bids(tmp_path, monkeypatch):
+    import whistapp.database as database
+    monkeypatch.setattr(database, 'DB_PATH', tmp_path / 'test.sqlite3')
+    init_db()
+    with connect() as db:
+        _seed(db)
+        data = load(db, Scope())
+    table = BidsShareByMember().compute(data)
+    assert [c.label for c in table.columns] == [
+        'Spiller', 'Almindelige', 'Halve', 'VIP', 'VIP1', 'VIP2', 'VIP3', 'Sans', 'Gode', 'Sol', 'Ren sol',
+        'Bordlægger', 'I alt']
+    rows = {r['name']: r for r in _texts(table)}
+    # M1 bid one Almindelige and one Sol; M2 only an Almindelige; M3 only a Sol; M4 never bid.
+    assert {k: rows['M1'][k] for k in ('almindelige', 'sol', 'halve', 'vip', 'total')} == \
+        {'almindelige': '50,0 %', 'sol': '50,0 %', 'halve': '0,0 %', 'vip': '0,0 %', 'total': '2'}
+    assert (rows['M2']['almindelige'], rows['M2']['sol'], rows['M2']['total']) == ('100,0 %', '0,0 %', '1')
+    assert rows['M3']['sol'] == '100,0 %' and 'M4' not in rows
+    # Each member's shares add up to the whole; the club row is all members' bids together.
+    bids = [c.key for c in table.columns if c.key not in ('name', 'vip', 'total')]
+    assert all(sum(row[b] for b in bids) == 1 for row in table.rows)
+    footer = {c.key: cell(table.footer[c.key], c.fmt)[0] for c in table.columns}
+    assert (footer['name'], footer['almindelige'], footer['sol'], footer['total']) == ('Klubben', '50,0 %', '50,0 %', '4')

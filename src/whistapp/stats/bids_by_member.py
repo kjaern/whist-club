@@ -6,6 +6,29 @@ from .base import Cell, Column, Statistic, Table, pct_text, ratio
 from .bids_played import attempts
 
 
+def member_bids(data):
+    """(counts, names, labels, bids): member -> bid -> [n, won, lost], member names, bid labels
+    and the bid keys in score-book order. Påskrig and guests' bids are left out."""
+    counts = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))
+    labels, names = {}, {}
+    for h in data.hands:
+        for pid, won in attempts(h):
+            mid = data.member(pid)
+            if mid is None:
+                continue
+            names[mid] = data.member_name(mid, data.players[pid].name)
+            labels.setdefault(h.bid_key, h.bid_label)
+            c = counts[mid][h.bid_key]
+            c[0] += 1
+            if won is not None:
+                c[1 if won else 2] += 1
+    # Every bid a member can make is listed, also when nobody has bid it yet.
+    for bid, label in data.bids:
+        if bid != "paskrig":
+            labels.setdefault(bid, label)
+    return counts, names, labels, sorted(labels, key=data.bid_rank)
+
+
 class BidsByMember(Statistic):
     key = "meldinger_medlem"
     title = "Hvem melder hvad"
@@ -14,29 +37,12 @@ class BidsByMember(Statistic):
                    "Påskrig og gæsters meldinger tæller ikke med.")
 
     def compute(self, data):
-        counts = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))  # member -> bid -> [n, won, lost]
-        labels, names = {}, {}
-        for h in data.hands:
-            for pid, won in attempts(h):
-                mid = data.member(pid)
-                if mid is None:
-                    continue
-                names[mid] = data.member_name(mid, data.players[pid].name)
-                labels.setdefault(h.bid_key, h.bid_label)
-                c = counts[mid][h.bid_key]
-                c[0] += 1
-                if won is not None:
-                    c[1 if won else 2] += 1
+        counts, names, labels, bids = member_bids(data)
 
         def text(n, won, lost):
             share = ratio(won, won + lost)
             return Cell(f"{n} ({pct_text(share)})" if share is not None else str(n), n)
 
-        # Every bid a member can make gets a column, also when nobody has bid it yet.
-        for bid, label in data.bids:
-            if bid != "paskrig":
-                labels.setdefault(bid, label)
-        bids = sorted(labels, key=data.bid_rank)
         all_bids = sum(c[0] for per in counts.values() for c in per.values())
         rows = []
         for mid, per in sorted(counts.items(), key=lambda item: names[item[0]].casefold()):

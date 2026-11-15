@@ -8,6 +8,7 @@ from . import maps
 from .base import Topic
 from .bids_by_member import BidsByMember
 from .bids_played import BidsPlayed
+from .bids_share_by_member import BidsShareByMember
 from .club_rhythm import ClubRhythm
 from .dealer_seat import DealerSeat
 from .extremes import Extremes
@@ -25,7 +26,7 @@ from .special_multi import SpecialMulti
 
 TOPICS = [
     Topic("overblik", "Overblik", [Overview()]),
-    Topic("meldinger", "Meldinger", [BidsPlayed(), BidsByMember(), SpecialMulti()]),
+    Topic("meldinger", "Meldinger", [BidsPlayed(), BidsByMember(), BidsShareByMember(), SpecialMulti()]),
     Topic("makkerpar", "Makkerpar", [PartnerPairs(), SelfPartner(), MemberSpecials()]),
     Topic("bordet", "Bordet", [Neighbours(), PartnerSeat(), Seatings()]),
     # Members as points on a map (PCA and MDS), computed by maps.py and drawn by stat-maps.js.

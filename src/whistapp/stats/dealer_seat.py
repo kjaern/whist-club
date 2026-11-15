@@ -14,7 +14,7 @@ class DealerSeat(Statistic):
     title = "Plads ift. giver"
     topic = "placeringer"
     description = ("Hvordan det går på hver plads, regnet fra giveren, i hænder med fire ved bordet. "
-                   "Forhånd sidder til venstre for giveren og spiller ud. Giveren gemmes først fra 7/11/2026 "
+                   "Forhånd sidder til venstre for giveren og spiller ud."
                    "og kun på aftener spillet i appen.")
 
     def compute(self, data):

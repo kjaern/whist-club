@@ -4,6 +4,8 @@
 - All tests: `uv run --extra test pytest -q` (uses an isolated temp `WHIST_HOME`; no services or prebuilt DB needed).
 - One test: `uv run --extra test pytest tests/test_finance_v19.py::test_settlement_order_and_ties -q`
 - Lint: `uvx ruff check src tests` (no typecheck configured).
+- The `justfile` wraps these commands (`just check` = lint + tests as CI runs them); `uvx --from rust-just just` works without just installed.
+- `tests/test_laws_zero_sum.py` holds Hypothesis property tests (laws). Add new invariants there or alongside it rather than weakening them.
 - Build: `uv build` (hatchling; package is `src/whistapp`).
 - Run from source: set `WHIST_HOME` to a scratch directory, then `uv run whistapp init --username admin`, then `uv run whistapp serve`. Without `WHIST_HOME`, the current directory is used.
 - Container: `docker compose up -d --build whist`; tunnel profile: `docker compose --profile tunnel up -d --build`.

@@ -151,6 +151,8 @@ All are run as `uv run whistapp <command>` (in Docker: `docker compose run --rm 
 
 - Tests: `uv run --extra test pytest -q`
 - Lint: `uvx ruff check src tests`
+- Or use the [justfile](justfile): `just` lists the tasks (`just check` runs tests and lint as CI does). Without just installed: `uvx --from rust-just just check`.
+- `tests/test_laws_zero_sum.py` uses [Hypothesis](https://hypothesis.readthedocs.io/) to check that every hand, every night and the settlement between players sum to zero; `just laws` runs only those.
 - Bid rules are the Python classes in `src/whistapp/bids/`; the **Vis regler** dialog shows the actual scoring code.
 - More notes for contributors and coding assistants are in [AGENTS.md](AGENTS.md).
 

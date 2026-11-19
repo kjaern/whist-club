@@ -367,10 +367,6 @@ fetch('/import/ai/staged/{{ai_artifacts.token}}/transcription.json')
 {% for v in rule_versions %}<option value="{{v.id}}" {% if rule_version|default('')==v.id|string or (not rule_version|default('') and loop.first) %}selected{% endif %}>{{v.name}}{% if loop.first %} (nuværende){% endif %}</option>{% endfor %}
 </select></label>
 <label><input type="checkbox" name="collect_club_money" value="1"> Medregn i pengestatistik</label>
-<label>Ret en tidligere import (valgfrit)<select name="replace_id">
-<option value="">Opret ny spilaften</option>
-{% for s in previous %}<option value="{{s.id}}" {% if replace_id|string==s.id|string %}selected{% endif %}>Erstat: {{s.title}} (#{{s.id}})</option>{% endfor %}
-</select></label>
 </section>
 <section class="card">
 <h2>Hænder — {{data.hands|length}}</h2>

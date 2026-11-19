@@ -191,10 +191,11 @@ def test_a_night_is_final_twelve_hours_after_closing(night):
 
 
 def test_an_imported_night_is_never_reopened(night):
-    """Imported nights are corrected by importing them again; they can still be deleted."""
+    """Imported nights are corrected by importing them again; inside their window they can be deleted."""
     sid, _, _ = night
     with connect() as db:
-        db.execute("UPDATE sessions SET origin='imported',ended_at=datetime('now','-1 hour') WHERE id=?", (sid,))
+        db.execute("""UPDATE sessions SET origin='imported',ended_at=datetime('now','-30 days'),
+                      saved_at=datetime('now','-1 hour') WHERE id=?""", (sid,))
     client = _admin()
     try:
         page = client.get(f"/sessions/{sid}").text

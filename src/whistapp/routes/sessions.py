@@ -147,8 +147,11 @@ async def create_session(request: Request):
 @router.post("/sessions/{sid}/delete")
 def delete_session(request: Request, sid: int):
     with connect() as db:
-        if is_final(get_session(db, sid)):
-            raise HTTPException(409, f"Spilaftenen blev afsluttet for mere end {REOPEN_HOURS} timer siden og kan ikke slettes")
+        db.execute("BEGIN IMMEDIATE")  # the night cannot become final or be posted between check and delete
+        session = get_session(db, sid)
+        if is_final(session):
+            done = "gemt" if session["origin"] == "imported" else "afsluttet"
+            raise HTTPException(409, f"Spilaftenen blev {done} for mere end {REOPEN_HOURS} timer siden og kan ikke slettes")
         with kasse.watch(db, sid, "delete"):
             db.execute("DELETE FROM sessions WHERE id=?", (sid,))
     shutil.rmtree(PHOTO_ROOT / str(sid), ignore_errors=True)

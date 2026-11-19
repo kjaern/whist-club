@@ -6,7 +6,7 @@ import logging
 import re
 import sqlite3
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from fractions import Fraction
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -22,9 +22,9 @@ from .buildinfo import application_commit, application_version
 from .club import active_club_id, club_settings
 from .database import connect
 from .finance import MONEY_MODES
-from .kasse import ledger
+from .kasse import aftener, ledger
 from .kasse.base import UnknownEntryType
-from .rule_versions import REOPEN_HOURS, night_rules
+from .rule_versions import REOPEN_HOURS, night_rules  # noqa: F401 (REOPEN_HOURS is re-exported)
 from .rules import bid_short_names, enabled_bid_keys, load_rules
 from .vision_import import admin_llm_settings
 
@@ -288,21 +288,31 @@ templates.env.globals["night_time"] = night_time
 
 
 # REOPEN_HOURS (imported above from rule_versions, and re-exported here): a closed live night
-# can be reopened, or deleted, for this long; after that it is final.
+# can be reopened, or deleted, for this long, and an imported night can be deleted for this long
+# after it was saved (and imported again to correct it); after that it is final, when the kasse
+# posts it.
+
+
+def final_at(session):
+    """When a closed night becomes final (UTC); None while it is open.
+
+    The same moment the kasse posts it (aftener.final_at): REOPEN_HOURS after a live night was
+    last closed, or after an imported night was last saved. Where the kasse does not know that
+    time (an import saved before saved_at existed, or an unreadable time) it never guesses and
+    leaves the night in Afventer until migrations/kasse_post_history.py posts it; here such a
+    closed night counts as final long ago, so it is locked rather than open forever.
+    """
+    if session["ended_at"] is None:
+        return None
+    return aftener.final_at(session) or datetime.min.replace(tzinfo=timezone.utc)
 
 
 def reopen_until(session):
-    """When a closed live night becomes final (UTC); None for an open or imported night.
+    """When a closed live night can no longer be reopened (UTC); None for an open or imported night.
 
     An imported night is corrected by importing it again, never reopened.
     """
-    if session["ended_at"] is None or session["origin"] == "imported":
-        return None
-    try:
-        closed = datetime.strptime(str(session["ended_at"]), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-    except ValueError:
-        return datetime.min.replace(tzinfo=timezone.utc)  # an unreadable time counts as long ago
-    return closed + timedelta(hours=REOPEN_HOURS)
+    return None if session["origin"] == "imported" else final_at(session)
 
 
 def can_reopen(session):
@@ -311,8 +321,8 @@ def can_reopen(session):
 
 
 def is_final(session):
-    """Closed, live and past its reopen window: it can no longer be reopened or deleted."""
-    until = reopen_until(session)
+    """Closed and past its window: it can no longer be reopened or deleted."""
+    until = final_at(session)
     return until is not None and datetime.now(timezone.utc) >= until
 
 
@@ -322,8 +332,8 @@ def local_minute(utc):
 
 
 def reopen_deadline(session):
-    """Danish time a closed night can be reopened until, for the night page."""
-    until = reopen_until(session)
+    """Danish time a closed night can be reopened (an import: deleted) until, for the night page."""
+    until = final_at(session)
     return until and local_minute(until)
 
 

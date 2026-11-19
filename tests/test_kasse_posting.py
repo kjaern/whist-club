@@ -170,15 +170,6 @@ def test_an_imported_night_waits_from_when_it_was_saved(club):
         assert ledger.finalize_due(db, club_id, now=NOW + timedelta(hours=12)) == [sid]
 
 
-def test_saving_an_import_stamps_saved_at(admin_in):
-    admin, club_id, members = admin_in
-    with connect() as db:
-        sid = _closed_night(db, club_id, members, [0, 25, 75, 115], origin="imported")
-    admin.post(f"/sessions/{sid}/money", data={}, follow_redirects=False)
-    with connect() as db:
-        assert db.execute("SELECT saved_at FROM sessions WHERE id=?", (sid,)).fetchone()[0]
-
-
 # 8. Two requests at once post a night once ----------------------------------------
 
 def test_concurrent_finalization_posts_once(club):

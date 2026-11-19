@@ -833,41 +833,19 @@ def field_issues(hand, players, problems):
     return fields
 
 
-def save_import(db, data, title, created_at, member_mapping, replace_id=None, rule_version_id=None):
+def save_import(db, data, title, created_at, member_mapping, rule_version_id=None):
     """All-or-nothing import; caller owns the transaction."""
     issues = validate(data)
     if any(issues):
         raise ValueError("Ret fejlene før import")
 
-    if replace_id is not None:
-        old = db.execute(
-            "SELECT origin FROM sessions WHERE id=? AND club_id=?", (replace_id, active_club_id())
-        ).fetchone()
-        if not old or old["origin"] != "imported":
-            raise ValueError("Kun importerede aftener kan erstattes")
-
-        # Keep session ID, but delete dependent data only after validation.
-        sid = replace_id
-        db.execute("DELETE FROM historical_final_scores WHERE session_id=?", (sid,))
-        db.execute("DELETE FROM hands WHERE session_id=?", (sid,))
-        db.execute("DELETE FROM players WHERE session_id=?", (sid,))
-        db.execute("DELETE FROM club_member_settlements WHERE session_id=?", (sid,))
-        db.execute("DELETE FROM session_settlements WHERE session_id=?", (sid,))
-        db.execute("DELETE FROM penalty_payments WHERE session_id=?", (sid,))
-        db.execute(
-            "UPDATE sessions SET title=?,created_at=?,ended_at=?,is_club=?,collect_club_money=0 WHERE id=?",
-            (title, created_at, created_at, int(all(member_mapping.values())), sid),
-        )
-        if rule_version_id is not None:
-            stamp_night(db, sid, rule_version_id)
-    else:
-        sid = db.execute(
-            """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id,
-             server_version,server_commit) VALUES (?,?,?,'imported',?,0,?,?,?)""",
-            (title, created_at, created_at, int(all(member_mapping.values())), active_club_id(),
-             *build_stamp()),
-        ).lastrowid
-        stamp_night(db, sid, rule_version_id)
+    sid = db.execute(
+        """INSERT INTO sessions(title,created_at,ended_at,origin,is_club,collect_club_money,club_id,
+         server_version,server_commit) VALUES (?,?,?,'imported',?,0,?,?,?)""",
+        (title, created_at, created_at, int(all(member_mapping.values())), active_club_id(),
+         *build_stamp()),
+    ).lastrowid
+    stamp_night(db, sid, rule_version_id)
 
     ids = {}
     for i, name in enumerate(data["players"]):

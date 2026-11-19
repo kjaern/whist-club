@@ -37,7 +37,7 @@ Transcribe historical handwritten score sheets into a readable Excel workbook an
 ## Application import
 
 - Detailed historical evenings become normal game evenings/hands whenever the evidence permits, so hand-level statistics can be derived from the database.
-- Historical evenings can be corrected or enriched later, including when new photographs become available.
+- An import always creates a new evening. For 12 hours after it was saved (`REOPEN_HOURS`, as for a live evening after closing) it can be deleted and imported again to correct it; after that it is final, like a live evening, and the Klubkasse posts it. Klubkasse is chosen when the import is saved and is not changed afterwards. New photographs can still be added later, but a final evening's photographs cannot be removed.
 - Source score changes and provenance are preserved so discrepancies with reconstructed scoring can be reviewed.
 - An evening that cannot be reconstructed in full can be imported as final results only. Missing data must not count as zero, a loss, or a known bid outcome.
 - Imports are previewed and validated first and committed atomically per evening.
@@ -45,10 +45,10 @@ Transcribe historical handwritten score sheets into a readable Excel workbook an
 ## Game origin and statistics filtering
 
 - Each evening has a persistent **origin**: `live` (entered through the application) or `imported`.
-- Origin is independent of data completeness, and an imported evening stays `imported` when corrected.
+- Origin is independent of data completeness.
 - Statistics can be filtered by **All**, **Live**, or **Imported** (default All), applied consistently to all statistics.
 - Imported data contributes only where the underlying facts are known: a known SOL declaration counts toward bid frequency even if its outcome is unknown, but not toward a success rate.
-- Re-uploading the same evening should be detected and offered as an update rather than a duplicate.
+- There is no update in place: re-uploading an evening creates another evening, so delete the wrong one within its 12 hours.
 
 ## Filename date convention
 

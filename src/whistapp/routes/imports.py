@@ -38,7 +38,7 @@ from ..historical_import import (
 )
 from ..settings import DATA
 from ..vision_import import transcribe_images
-from ..web import ai_import_allowed, render
+from ..web import ai_import_allowed, is_final, render
 
 router = APIRouter()
 
@@ -641,7 +641,7 @@ def resume_import(request: Request, job_id: str):
     draft = _read_draft(job_id)
     return import_review(
         request, draft["data"], draft.get("title", ""),
-        draft.get("game_date", ""), draft.get("replace_id", ""),
+        draft.get("game_date", ""),
         draft.get("mapping", {}), draft.get("date_precision", "unknown"),
     )
 
@@ -848,20 +848,12 @@ def _render_import_page(
             dict(r)
             for r in db.execute("SELECT id,name FROM club_members WHERE club_id=? ORDER BY name", (active_club_id(),))
         ]
-        previous = [
-            dict(r)
-            for r in db.execute(
-                "SELECT id,title FROM sessions WHERE origin='imported' AND club_id=? ORDER BY id DESC",
-                (active_club_id(),),
-            )
-        ]
         rule_versions = rule_version_choices(db)
 
     return render(
         request,
         "historical_import.html",
         members=members,
-        previous=previous,
         rule_versions=rule_versions,
         data=None,
         errors=errors or [],
@@ -933,7 +925,6 @@ async def import_preview(request: Request):
         data,
         "",
         data.get("game_date", ""),
-        "",
         {},
         data.get("date_precision", "unknown"),
         source_workbooks=source_workbooks,
@@ -961,7 +952,7 @@ async def import_json_preview(request: Request):
         ])
         data["pending_source_files"] = source_token
         return import_review(
-            request, data, "", result.get("date", ""), "", {},
+            request, data, "", result.get("date", ""), {},
             result.get("date_precision", "unknown"),
             source_files=_staged_source_views(source_token),
         )
@@ -1079,7 +1070,6 @@ def ai_import_review(request: Request, job_id: str):
         job["data"],
         "",
         job["game_date"],
-        "",
         {},
         job["date_precision"],
         source_workbooks=job.get("source_workbooks", []),
@@ -1226,7 +1216,6 @@ def import_review(
     data,
     title,
     game_date,
-    replace_id,
     mapping,
     date_precision="unknown",
     source_workbooks=None,
@@ -1247,13 +1236,6 @@ def import_review(
         members = [
             dict(r)
             for r in db.execute("SELECT id,name FROM club_members WHERE club_id=? ORDER BY name", (active_club_id(),))
-        ]
-        previous = [
-            dict(r)
-            for r in db.execute(
-                "SELECT id,title FROM sessions WHERE origin='imported' AND club_id=? ORDER BY id DESC",
-                (active_club_id(),),
-            )
         ]
         rule_versions = rule_version_choices(db)
 
@@ -1289,7 +1271,6 @@ def import_review(
         request,
         "historical_import.html",
         members=members,
-        previous=previous,
         data=data,
         issues=errors,
         math_ok=math_ok,
@@ -1299,7 +1280,6 @@ def import_review(
         title=title,
         game_date=game_date,
         date_precision=date_precision,
-        replace_id=replace_id,
         rule_versions=rule_versions,
         # The commit route keeps the posted choice here when it shows the review again.
         rule_version=str(getattr(request.state, "rule_version", "")),
@@ -1390,7 +1370,6 @@ async def import_commit(request: Request):
                 data,
                 str(form.get("title", "")).strip()[:100],
                 str(form.get("game_date", "")).strip(),
-                str(form.get("replace_id", "")),
                 {},
                 str(form.get("date_precision", "unknown")),
                 form_errors=["Angiv fire spillere og mindst én hånd (maks. 500)."],
@@ -1408,7 +1387,6 @@ async def import_commit(request: Request):
                 data,
                 str(form.get("title", "")).strip()[:100],
                 str(form.get("game_date", "")).strip(),
-                str(form.get("replace_id", "")),
                 {},
                 str(form.get("date_precision", "unknown")),
                 form_errors=["Angiv fire forskellige spillernavne."],
@@ -1456,7 +1434,6 @@ async def import_commit(request: Request):
                 data,
                 title,
                 game_date,
-                str(form.get("replace_id", "")),
                 {},
                 date_precision,
                 form_errors=[str(exc)],
@@ -1476,7 +1453,6 @@ async def import_commit(request: Request):
                     data,
                     title,
                     game_date,
-                    str(form.get("replace_id", "")),
                     mapping,
                     date_precision,
                     form_errors=["Ukendt klubmedlem; vælg et kendt medlem eller gæst."],
@@ -1500,7 +1476,6 @@ async def import_commit(request: Request):
                         data,
                         title,
                         game_date,
-                        str(form.get("replace_id", "")),
                         mapping,
                         date_precision,
                         form_errors=[
@@ -1514,13 +1489,11 @@ async def import_commit(request: Request):
                 data,
                 title,
                 game_date,
-                str(form.get("replace_id", "")),
                 mapping,
                 date_precision,
                 form_errors=["To spillere er knyttet til samme klubmedlem."],
             )
 
-        replace_id = int(form.get("replace_id") or 0) or None
         problems = validate(data)
         if any(problems):
             return import_review(
@@ -1528,7 +1501,6 @@ async def import_commit(request: Request):
                 data,
                 title,
                 game_date,
-                replace_id or "",
                 mapping,
                 date_precision,
                 form_errors=[
@@ -1541,17 +1513,13 @@ async def import_commit(request: Request):
         change_descriptions = _import_change_descriptions(source_snapshot, data)
         permanent_sources = _staged_source_files(data.get("pending_source_files", ""))
         permanent_sources.extend(_ai_source_files(data.get("ai_token", "")))
+        # An import always makes a new night. A mistake is set right by deleting the night within
+        # REOPEN_HOURS and importing it again; after that it is final, as a live night is.
         with connect() as db:
             version = import_rule_version(form.get("rule_version"))
-            if replace_id:
-                # Saved over an existing night: what it charged before is compared with now.
-                with kasse.watch(db, replace_id, "import"):
-                    sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
-                    _set_import_money(db, sid, bool(form.get("collect_club_money")))
-            else:
-                sid = save_import(db, data, title, timestamp, mapping, replace_id, version)
-                _set_import_money(db, sid, bool(form.get("collect_club_money")))
-                kasse.add_alert(db, sid, "import", [], kasse.snapshot(db, sid))
+            sid = save_import(db, data, title, timestamp, mapping, version)
+            _set_import_money(db, sid, bool(form.get("collect_club_money")))
+            kasse.add_alert(db, sid, "import", [], kasse.snapshot(db, sid))
             _save_photos(db, sid, _staged_photos(data.get("pending_photos", "")))
             db.execute(
                 "UPDATE sessions SET date_precision=? WHERE id=?", (date_precision, sid)
@@ -1713,6 +1681,11 @@ async def add_session_photos(request: Request, sid: int):
 @router.post("/sessions/{sid}/photos/{photo_id}/delete")
 def remove_session_photo(sid: int, photo_id: int):
     with connect() as db:
+        db.execute("BEGIN IMMEDIATE")
+        session = db.execute("SELECT origin,ended_at,saved_at FROM sessions WHERE id=?", (sid,)).fetchone()
+        # A final imported night keeps its original sheets; photos can still be added to it.
+        if session is not None and session["origin"] == "imported" and is_final(session):
+            raise HTTPException(409, "Spilaftenen er endelig; dens originalark kan ikke længere fjernes")
         row = db.execute(
             "SELECT stored_name FROM session_photos WHERE id=? AND session_id=?",
             (photo_id, sid),
@@ -1724,27 +1697,6 @@ def remove_session_photo(sid: int, photo_id: int):
         )
 
     (PHOTO_ROOT / str(sid) / row["stored_name"]).unlink(missing_ok=True)
-    return RedirectResponse(f"/sessions/{sid}", status_code=303)
-
-
-@router.post("/sessions/{sid}/money")
-async def update_session_money(request: Request, sid: int):
-    form = await request.form()
-    enabled = bool(form.get("collect_club_money"))
-
-    with connect() as db:
-        session = db.execute(
-            "SELECT origin,is_club FROM sessions WHERE id=?", (sid,)
-        ).fetchone()
-        if not session:
-            raise HTTPException(404)
-        if session["origin"] != "imported":
-            raise HTTPException(400, "Kun historiske importer kan ændres her")
-        try:
-            with kasse.watch(db, sid, "money"):
-                _set_import_money(db, sid, enabled)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc))
     return RedirectResponse(f"/sessions/{sid}", status_code=303)
 
 

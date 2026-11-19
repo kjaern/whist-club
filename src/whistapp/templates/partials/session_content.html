@@ -83,7 +83,11 @@
         <button type="submit" class="secondary">Genåbn</button>
       </form>
       <span class="muted">Kan genåbnes indtil {{ reopen_deadline(session) }}.</span>
-    {% elif session.origin != 'imported' %}
+    {% elif session.origin == 'imported' and not is_final(session) %}
+      <span class="muted">En klubadministrator kan slette den fra forsiden indtil {{ reopen_deadline(session) }}, så den kan importeres igen.</span>
+    {% elif session.origin == 'imported' %}
+      <span class="muted">Endelig; kan ikke længere slettes.</span>
+    {% else %}
       <span class="muted">Endelig; kan ikke længere genåbnes.</span>
     {% endif %}
   {% endif %}

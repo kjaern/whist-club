@@ -465,6 +465,8 @@ ALERT_KINDS = {
     "reopen": "Afsluttet spilaften genåbnet",
     "delete": "Spilaften slettet",
     "import": "Spilaften importeret",
+    # Nothing makes this kind any more (an import's Klubkasse is chosen once, when it is saved);
+    # it stays so alerts made before that still show.
     "money": "Klubkasse slået til/fra for importeret aften",
 }
 

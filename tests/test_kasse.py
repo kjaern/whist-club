@@ -398,16 +398,3 @@ def test_reopening_then_deleting_a_night_alerts_through_the_routes(admin_in):
     with connect() as db:
         alerts = ledger.alerts(db, club_id)
     assert [a["kind"] for a in alerts] == ["delete"] and _change(alerts[0], members[3]) == (115, 0)
-
-
-def test_switching_off_klubkasse_on_an_imported_night_alerts(admin_in):
-    admin, club_id, members = admin_in
-    with connect() as db:
-        sid = _closed_night(db, club_id, members, [0, 25, 75, 115], origin="imported")
-    assert admin.post(f"/sessions/{sid}/money", data={}, follow_redirects=False).status_code == 303
-    with connect() as db:
-        alerts = ledger.alerts(db, club_id)
-        # owed_to_club is Bogført only (the night was never posted); Afventer must drop it too.
-        books = ledger.balances(db, club_id)
-        assert books["owed_to_club"] == 0 and books["pending_owed_to_club"] == 0
-    assert [a["kind"] for a in alerts] == ["money"] and _change(alerts[0], members[2]) == (75, 0)
